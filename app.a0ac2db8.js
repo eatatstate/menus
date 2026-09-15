@@ -45,27 +45,102 @@
   function isLight() { return document.documentElement.classList.contains("light"); }
   const ICON_M = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
   const ICON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
-  function applyThemeBtn() {
-    const btn = $("#theme-btn");
-    if (!btn) return;
+  function applyThemeMenu() {
+    const item = $("#menu-theme");
+    if (!item) return;
     const light = isLight();
-    btn.innerHTML = light ? ICON_M : ICON_S;
-    btn.title = light ? "Switch to dark theme" : "Switch to light theme";
-    btn.setAttribute("aria-label", btn.title);
+    item.querySelector(".mi-ico").innerHTML = light ? ICON_M : ICON_S;
+    item.querySelector(".mi-label").textContent = light ? "Dark theme" : "Light theme";
+    item.querySelector(".mi-state").textContent = light ? "Light" : "Dark";
+    item.title = light ? "Switch to dark theme" : "Switch to light theme";
   }
-  function initTheme() {
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.hidden = false;
+    requestAnimationFrame(() => t.classList.add("show"));
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      t.classList.remove("show");
+      setTimeout(() => { t.hidden = true; }, 220);
+    }, 2200);
+  }
+
+  async function shareSite() {
+    const url = location.origin + location.pathname;
+    if (navigator.share) {
+      gaEvent("share", { share_target: "site", share_method: "native" });
+      try {
+        await navigator.share({
+          title: "Eat@State — MSU dining menus",
+          text: "MSU campus dining menus, simplified.",
+          url,
+        });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // user dismissed the sheet
+        // share failed (e.g. insecure context) — fall through to copy
+      }
+    }
+    gaEvent("share", { share_target: "site", share_method: "copy" });
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied");
+    } catch (e) {
+      window.prompt("Copy this link:", url);
+    }
+  }
+
+  function initMoreMenu() {
     // html.light already applied pre-paint by the head bootstrap.
-    const btn = $("#theme-btn");
-    if (btn) btn.addEventListener("click", () => {
+    const btn = $("#more-btn");
+    const menu = $("#more-menu");
+    function setOpen(open) {
+      menu.classList.toggle("open", open);
+      btn.classList.toggle("menu-open", open);
+      btn.setAttribute("aria-expanded", String(open));
+    }
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setOpen(!menu.classList.contains("open"));
+    });
+    document.addEventListener("click", (e) => {
+      if (menu.classList.contains("open") && !menu.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setOpen(false);
+    });
+    window.addEventListener("resize", () => setOpen(false));
+
+    $("#menu-theme").addEventListener("click", () => {
       const next = isLight() ? "dark" : "light";
       document.documentElement.classList.toggle("light", next === "light");
       try {
         if (next === "dark") localStorage.removeItem(THEME_KEY);
         else localStorage.setItem(THEME_KEY, "light");
       } catch (e) {}
-      applyThemeBtn();
+      applyThemeMenu();
+      setOpen(false);
     });
-    applyThemeBtn();
+    // Refresh is PWA-only: the static site has no live source to refetch.
+    if (STATIC) $("#menu-refresh").hidden = true;
+    $("#menu-refresh").addEventListener("click", () => {
+      setOpen(false);
+      doFetch(state.meal, { force: true });
+    });
+    $("#menu-share").addEventListener("click", () => {
+      setOpen(false);
+      shareSite();
+    });
+    $("#menu-about").addEventListener("click", () => {
+      const shaEl = document.querySelector(".build-sha");
+      const sha = shaEl ? shaEl.textContent.trim() : "";
+      showToast("Eat@State · build " + (sha || "—"));
+      setOpen(false);
+    });
+    applyThemeMenu();
   }
 
   /* ---------- data ---------- */
@@ -156,8 +231,8 @@
     state.meal = meal;
     renderChrome();
     state.loading = true;
-    const btn = $("#refresh-btn");
-    btn.classList.add("spinning");
+    const btn = $("#menu-refresh");
+    if (btn) btn.classList.add("spinning");
     try {
       if (!staticDate || force) {
         const c = $("#content");
@@ -186,7 +261,7 @@
     } finally {
       if (seq === undefined || seq === reqSeq) {
         state.loading = false;
-        btn.classList.remove("spinning");
+        if (btn) btn.classList.remove("spinning");
       }
     }
   }
@@ -205,8 +280,8 @@
     state.meal = meal;
     renderChrome();
     state.loading = true;
-    const btn = $("#refresh-btn");
-    btn.classList.add("spinning");
+    const btn = $("#menu-refresh");
+    if (btn) btn.classList.add("spinning");
     try {
       const res = await fetch("/api/menus?meal=" + meal + "&date=" + (date || todayStr()));
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -230,7 +305,7 @@
     } finally {
       if (seq === reqSeq) {
         state.loading = false;
-        btn.classList.remove("spinning");
+        if (btn) btn.classList.remove("spinning");
       }
     }
   }
@@ -747,9 +822,8 @@
   });
 
   // The static page is served from a provided JSON file, so there is no live
-  // source to refresh — hide the refresh button in STATIC mode.
-  if (STATIC) $("#refresh-btn").hidden = true;
-  $("#refresh-btn").addEventListener("click", () => doFetch(state.meal, { force: true }));
+  // source to refresh — the overflow menu's refresh item is hidden in STATIC
+  // mode (handled in initMoreMenu).
 
   ["breakfast", "lunch", "dinner"].forEach((m) => {
     $("#meal-" + m).addEventListener("click", () => setMeal(m));
@@ -802,7 +876,7 @@
 
   /* ---------- init ---------- */
 
-  initTheme();
+  initMoreMenu();
 
   // Keep the sticky control bar docked right below the sticky topbar
   // (topbar height varies: safe-area inset, mobile single-row layout).

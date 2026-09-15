@@ -95,13 +95,12 @@ button { font: inherit; cursor: pointer; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .meal-seg { flex-wrap: wrap; }
 @media (max-width: 480px) {
-  /* Single row: title + meal tabs + theme (refresh hidden — page reload works). */
+  /* Single row: title + meal tabs + more (refresh lives in the menu). */
   .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
   .topbar-actions { width: auto; justify-content: flex-end; }
   .brand-mark { display: none; }
   .brand h1 { font-size: .95rem; white-space: nowrap; }
   .meal-seg .seg-btn { padding: 6px 7px; font-size: .78rem; white-space: nowrap; }
-  #refresh-btn { display: none; }
   .icon-btn { width: 34px; min-height: 0; font-size: 1rem; }
 }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -142,6 +141,51 @@ button { font: inherit; cursor: pointer; }
 .icon-btn svg { width: 1.15em; height: 1.15em; display: block; }
 .icon-btn.spinning svg { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- overflow ("more") menu ---------- */
+.more-wrap { position: relative; }
+.icon-btn.menu-open { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--chip-active); }
+.more-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  min-width: 212px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .04);
+  padding: 6px;
+  opacity: 0; transform: translateY(-4px) scale(.98); transform-origin: top right;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1px 0 rgba(255, 255, 255, .6); }
+.more-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: none; border-radius: 8px; background: transparent;
+  color: var(--text); font-family: var(--font-sans); font-size: .85rem; font-weight: 500;
+  text-align: left; cursor: pointer;
+}
+.menu-item:hover { background: var(--chip); }
+.menu-item:active { background: var(--chip-active); }
+.mi-ico { display: grid; place-items: center; color: var(--muted); flex: 0 0 auto; }
+.mi-ico svg { width: 16px; height: 16px; display: block; }
+.mi-label { white-space: nowrap; }
+.mi-state {
+  margin-left: auto; font-size: .7rem; color: var(--dim); white-space: nowrap;
+}
+.menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+
+/* ---------- toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: calc(20px + var(--safe-bottom));
+  transform: translateX(-50%); z-index: 400;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 16px; font-size: .85rem; color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4); white-space: nowrap;
+  opacity: 0; transition: opacity .2s ease;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; }
 
 .offline-banner {
   background: #3a2f14;
@@ -453,7 +497,7 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
   letter-spacing: .3px;
 }
 
-.modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: end center; }
+.modal { position: fixed; inset: 0; z-index: 300; display: grid; place-items: end center; }
 .modal[hidden] { display: none; }
 @media (min-width: 640px) { .modal { place-items: center; } }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.6); }
