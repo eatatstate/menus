@@ -1,6 +1,7 @@
 /* Eat at State — Lunch Menus PWA */
 (function () {
   "use strict";
+  let splashShownAt = performance.now(); // splash paints with the HTML — clock starts here
 
   const CATEGORIES = ["entree", "side", "grain", "salad", "dessert", "beverage", "other"];
   const CAT_LABEL = {
@@ -331,23 +332,31 @@
 
   /* ---------- splash ---------- */
 
-  // Sparty dinner-reveal splash: visible while the first meal is loading.
+  // Sparty dinner-reveal splash: visible while the first meal is loading,
+  // and ALWAYS for at least SPLASH_MIN_MS so the full reveal choreography
+  // (enter -> cloche -> plate pop) plays even when data is served from cache.
   // Hides on the first successful render (any data source) or on a terminal
   // error, and is never shown again within the session.
+  const SPLASH_MIN_MS = 3200;
   let splashHidden = false;
   function setSplashMeal(meal) {
     const t = document.getElementById("splash-meal-title");
     if (t) t.textContent = "Today's " + meal.charAt(0).toUpperCase() + meal.slice(1);
   }
-  function hideSplash() {
-    if (splashHidden) return;
-    splashHidden = true;
+  function doHideSplash() {
     const s = document.getElementById("splash");
     if (!s) return;
     s.classList.add("hide");
     s.addEventListener("transitionend", () => s.remove(), { once: true });
     // Belt-and-braces: never leave a stuck overlay (e.g. transition suppressed).
     setTimeout(() => { if (s.isConnected) s.remove(); }, 1200);
+  }
+  function hideSplash() {
+    if (splashHidden) return;
+    splashHidden = true;
+    const remain = SPLASH_MIN_MS - (performance.now() - splashShownAt);
+    if (remain > 0) setTimeout(doHideSplash, remain);
+    else doHideSplash();
   }
 
   function showOffline(on) {
