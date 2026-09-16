@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.68d4ab0a.css">
+<link rel="stylesheet" href="styles.9ac79844.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -41,189 +41,6 @@
 <script>(function () { try { if (localStorage.getItem("eas-theme") === "light") document.documentElement.classList.add("light"); } catch (e) {} })();</script>
 </head>
 <body>
-<div id="splash" class="splash" aria-hidden="true">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
-  <title id="title">Today's Dinner — Sparty unveiling dinner</title>
-  <desc id="desc">Layered vector splash scene for a PWA. Elements are grouped by IDs for CSS animation.</desc>
-  <defs>
-    <radialGradient id="bgGrad" cx="50%" cy="42%" r="72%">
-      <stop offset="0" stop-color="#0f684f"/>
-      <stop offset="0.52" stop-color="#064536"/>
-      <stop offset="1" stop-color="#012d25"/>
-    </radialGradient>
-    <radialGradient id="haloGrad" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#6fd7b0" stop-opacity="0.34"/>
-      <stop offset="0.6" stop-color="#6fd7b0" stop-opacity="0.08"/>
-      <stop offset="1" stop-color="#6fd7b0" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f8faf8"/>
-      <stop offset="0.35" stop-color="#b9c0bc"/>
-      <stop offset="0.58" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#7e8984"/>
-    </linearGradient>
-    <linearGradient id="armor" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1c7259"/>
-      <stop offset="1" stop-color="#063b2f"/>
-    </linearGradient>
-    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffd49c"/>
-      <stop offset="1" stop-color="#d99450"/>
-    </linearGradient>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="18"/>
-    </filter>
-    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.28"/>
-    </filter>
-    <filter id="steamBlur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="2.5"/>
-    </filter>
-    <clipPath id="plateClip"><ellipse cx="540" cy="725" rx="235" ry="58"/></clipPath>
-  </defs>
-
-  <!-- Layer 01: background -->
-  <g id="layer-background">
-    <rect width="1080" height="1080" fill="url(#bgGrad)"/>
-    <ellipse id="background-glow" cx="540" cy="420" rx="390" ry="360" fill="url(#haloGrad)" filter="url(#softGlow)"/>
-    <circle id="halo-ring" cx="540" cy="405" r="285" fill="none" stroke="#78d6b2" stroke-opacity="0.42" stroke-width="12"/>
-    <path d="M150 890 Q540 805 930 890 L930 1080 L150 1080 Z" fill="#07382e"/>
-  </g>
-
-  <!-- Layer 02: celebratory accents -->
-  <g id="layer-accents" fill="#a4ecd0">
-    <rect x="250" y="235" width="70" height="18" rx="9" transform="rotate(-34 250 235)"/>
-    <rect x="810" y="225" width="62" height="18" rx="9" transform="rotate(32 810 225)"/>
-    <rect x="880" y="315" width="50" height="18" rx="9" transform="rotate(-8 880 315)"/>
-    <circle cx="215" cy="315" r="9"/>
-  </g>
-
-  <!-- Layer 03: Spartan shadow/body -->
-  <g id="layer-sparty">
-    <!-- torso -->
-    <path d="M340 475 Q430 420 540 445 Q650 420 740 485 L785 720 Q720 760 540 760 Q360 760 295 720 Z" fill="url(#armor)"/>
-    <!-- left shoulder -->
-    <path d="M360 500 Q285 465 235 540 L295 615 Q350 585 405 575 Z" fill="#0a493a" stroke="#bcc4c0" stroke-width="8"/>
-    <!-- shoulder plates -->
-    <g fill="#1f745c" stroke="#c5cbc7" stroke-width="7">
-      <path d="M255 515 Q225 532 215 563 L248 612 Q274 598 292 580 Z"/>
-      <path d="M292 498 Q262 508 249 535 L283 590 Q309 577 326 559 Z"/>
-      <path d="M329 486 Q303 492 289 516 L318 567 Q344 558 360 542 Z"/>
-    </g>
-
-    <!-- neck -->
-    <path d="M465 395 L615 395 L630 490 Q540 525 450 490 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="5"/>
-
-    <!-- head -->
-    <path d="M417 230 Q455 145 540 150 Q625 145 663 230 L650 400 Q623 468 540 478 Q457 468 430 400 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="5"/>
-    <!-- ear -->
-    <ellipse cx="422" cy="337" rx="28" ry="42" fill="#e7ad70" stroke="#9e6c45" stroke-width="4"/>
-    <ellipse cx="658" cy="337" rx="28" ry="42" fill="#e7ad70" stroke="#9e6c45" stroke-width="4"/>
-
-    <!-- helmet -->
-    <path d="M392 300 Q388 174 540 132 Q692 174 688 300 L650 312 L642 220 Q540 184 438 220 L430 312 Z" fill="url(#armor)" stroke="#c6cdc9" stroke-width="9"/>
-    <path d="M396 260 Q540 206 684 260 L677 305 Q540 254 403 305 Z" fill="#0b4639" stroke="#c9d0cc" stroke-width="8"/>
-    <!-- helmet crest -->
-    <path d="M505 160 Q540 78 575 160 L588 176 L492 176 Z" fill="#f5ede0"/>
-    <path d="M520 160 Q540 105 560 160" fill="none" stroke="#d7cebf" stroke-width="6"/>
-
-    <!-- brows/eyes -->
-    <path d="M458 298 Q487 282 515 298" fill="none" stroke="#3a2419" stroke-width="14" stroke-linecap="round"/>
-    <path d="M565 298 Q593 282 622 298" fill="none" stroke="#3a2419" stroke-width="14" stroke-linecap="round"/>
-    <ellipse cx="492" cy="318" rx="19" ry="14" fill="#f8f9f7"/>
-    <ellipse cx="588" cy="318" rx="19" ry="14" fill="#f8f9f7"/>
-    <circle cx="493" cy="319" r="8" fill="#134e3f"/>
-    <circle cx="589" cy="319" r="8" fill="#134e3f"/>
-
-    <!-- nose/mouth -->
-    <path d="M540 313 Q526 355 545 360 Q555 358 562 354" fill="none" stroke="#b9764c" stroke-width="6" stroke-linecap="round"/>
-    <path d="M482 385 Q540 428 598 385" fill="#fffdf7" stroke="#8c5534" stroke-width="6"/>
-    <path d="M495 395 Q540 405 585 395" stroke="#e0a071" stroke-width="4"/>
-
-    <!-- right forearm -->
-    <path d="M692 510 Q770 474 824 532 L790 607 Q732 600 678 566 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="5"/>
-    <!-- right gauntlet -->
-    <path d="M755 521 L825 494 L862 583 L791 611 Z" fill="url(#metal)" stroke="#838d88" stroke-width="6"/>
-    <!-- hand gripping cloche -->
-    <path d="M804 492 Q829 445 869 466 Q893 480 880 513 L850 542 Q815 533 804 492 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="5"/>
-
-    <!-- left arm + thumb -->
-    <path d="M310 540 Q250 590 270 700 Q292 752 354 735 L390 677 Q340 625 370 578 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="5"/>
-    <path d="M272 654 Q288 620 327 625 Q360 632 373 666 Q352 710 318 706 Q284 702 272 654 Z" fill="url(#skin)"/>
-    <path d="M329 648 Q349 625 366 643 Q384 660 369 676 Q352 691 338 675 Z" fill="url(#skin)" stroke="#9e6c45" stroke-width="4"/>
-    <path d="M290 625 L355 610 L377 700 L312 720 Z" fill="url(#metal)" stroke="#838d88" stroke-width="6"/>
-  </g>
-
-  <!-- Layer 04: cloche -->
-  <g id="layer-cloche" transform="rotate(-6 840 535)">
-    <ellipse cx="822" cy="565" rx="128" ry="34" fill="#737d79" opacity="0.42"/>
-    <path d="M704 548 Q748 400 846 405 Q944 410 988 548 Z" fill="url(#metal)" stroke="#7d8883" stroke-width="8"/>
-    <ellipse cx="846" cy="548" rx="142" ry="37" fill="#c8cfcb" stroke="#77827e" stroke-width="8"/>
-    <ellipse cx="846" cy="546" rx="122" ry="26" fill="#5e6764" opacity="0.55"/>
-    <rect x="818" y="380" width="56" height="38" rx="18" fill="url(#metal)" stroke="#7d8883" stroke-width="6"/>
-  </g>
-
-  <!-- Layer 05: steam -->
-  <g id="layer-steam" fill="none" stroke="#edf8f3" stroke-linecap="round" opacity="0.72" filter="url(#steamBlur)">
-    <path d="M515 684 C490 640 525 618 508 582 C493 550 528 536 519 501" stroke-width="16"/>
-    <path d="M565 686 C540 644 580 616 559 582 C542 551 579 528 564 491" stroke-width="13"/>
-    <path d="M615 684 C592 642 628 616 612 581 C597 548 630 530 620 504" stroke-width="12"/>
-  </g>
-
-  <!-- Layer 06: table/placemat -->
-  <g id="layer-table">
-    <path d="M235 790 Q540 720 845 790 L930 1080 L150 1080 Z" fill="#0c4b3c"/>
-    <path d="M360 790 Q540 750 720 790 L780 1080 L300 1080 Z" fill="#0a3f32"/>
-    <g id="layer-emblem" transform="translate(540 860) scale(0.72)">
-      <path d="M-76 35 Q-55 -55 18 -55 Q68 -55 88 -20 Q51 -18 40 11 Q28 44 -5 50 Z" fill="#f6f5ef"/>
-      <path d="M-36 -37 Q-4 -62 40 -39 Q8 -32 -6 -7 Q-18 15 -43 17 Z" fill="#0a4d3c"/>
-    </g>
-  </g>
-
-  <!-- Layer 07: dinner plate -->
-  <g id="layer-dinner">
-    <ellipse cx="540" cy="738" rx="256" ry="58" fill="#f7f6f1" stroke="#d9ddd8" stroke-width="6"/>
-    <ellipse cx="540" cy="724" rx="220" ry="44" fill="#ffffff"/>
-    <!-- potatoes -->
-    <g fill="#d6ad68">
-      <ellipse cx="447" cy="731" rx="25" ry="15" transform="rotate(-12 447 731)"/>
-      <ellipse cx="462" cy="711" rx="25" ry="14" transform="rotate(18 462 711)"/>
-      <ellipse cx="633" cy="716" rx="28" ry="16" transform="rotate(22 633 716)"/>
-      <ellipse cx="666" cy="731" rx="27" ry="15" transform="rotate(-8 666 731)"/>
-    </g>
-    <!-- broccoli -->
-    <g fill="#31834c">
-      <circle cx="434" cy="698" r="22"/><circle cx="458" cy="688" r="24"/><circle cx="480" cy="701" r="21"/>
-      <circle cx="644" cy="696" r="22"/><circle cx="666" cy="688" r="20"/><circle cx="688" cy="702" r="22"/>
-    </g>
-    <!-- carrots -->
-    <g fill="#ec8f30">
-      <path d="M485 700 L519 678 L540 692 L504 716 Z"/>
-      <path d="M589 699 L621 679 L641 694 L607 716 Z"/>
-    </g>
-    <!-- steak -->
-    <path d="M486 678 Q538 643 616 665 Q640 674 635 704 Q628 733 580 741 Q522 740 492 720 Q474 705 486 678 Z" fill="#8f4229" stroke="#6c2d1d" stroke-width="5"/>
-    <path d="M500 685 L620 708 M520 668 L605 725 M545 661 L632 694" stroke="#e1b27b" stroke-width="7" opacity="0.72"/>
-    <!-- garnish -->
-    <path d="M555 662 Q563 640 575 656 Q588 636 592 659" fill="none" stroke="#3c9559" stroke-width="8" stroke-linecap="round"/>
-  </g>
-
-  <!-- Layer 08: utensils -->
-  <g id="layer-utensils" fill="url(#metal)" stroke="#76817c" stroke-width="5">
-    <path id="fork" d="M300 805 L347 733 L361 741 L320 812 L340 818 L300 880 L279 868 Z"/>
-    <path id="knife" d="M772 735 Q788 725 802 743 L843 846 L811 855 L784 805 Z"/>
-  </g>
-
-  <!-- Layer 09: typography -->
-  <g id="layer-text" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" fill="#f6f5ef">
-    <text id="splash-meal-title" x="540" y="930" font-size="54" font-weight="700" letter-spacing="2">Today's Dinner</text>
-    <text x="540" y="968" font-size="20" font-weight="700" letter-spacing="7" fill="#a6ebd0">EAT WELL. GO GREEN.</text>
-    <rect x="365" y="995" width="350" height="12" rx="6" fill="#274e45" stroke="#79cdb0" stroke-opacity="0.35"/>
-    <rect id="progress-fill" x="365" y="995" width="190" height="12" rx="6" fill="#8be0bb"/>
-    <text x="540" y="1042" font-size="14" letter-spacing="6" fill="#f6f5ef">LOADING...</text>
-  </g>
-</svg>
-</div>
 <a class="skip-link" href="#content">Skip to menus</a>
 <header class="topbar">
   <div class="topbar-inner">
@@ -304,7 +121,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-sha">1b44605</span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-sha">0d96540</span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -332,7 +149,7 @@
   </div>
 </div>
 
-<script src="app.8c3c9837.js"></script>
+<script src="app.fa448220.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>
