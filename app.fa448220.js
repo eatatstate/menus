@@ -134,6 +134,10 @@
       setOpen(false);
       shareSite();
     });
+    $("#menu-hours").addEventListener("click", () => {
+      setOpen(false);
+      openHoursModal();
+    });
     $("#menu-about").addEventListener("click", () => {
       const shaEl = document.querySelector(".build-sha");
       const sha = shaEl ? shaEl.textContent.trim() : "";
@@ -791,6 +795,118 @@
   }
   $("#modal").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  /* ---------- dining hours modal ---------- */
+
+  const HOURS_CACHE_KEY = "eas-hours-cache";
+  let hoursData = null; // in-memory; persisted to localStorage for offline
+
+  // PWA: live /api/hours (server caches 6h). Static: the published snapshot.
+  async function fetchHours() {
+    const url = STATIC ? "data/dining-hours.json" : "/api/hours";
+    const res = await fetch(url, { cache: "no-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    if (!d || !Array.isArray(d.sections)) throw new Error("bad hours payload");
+    return d;
+  }
+  function loadHoursCache() {
+    try { return JSON.parse(localStorage.getItem(HOURS_CACHE_KEY)); } catch (e) { return null; }
+  }
+  function saveHoursCache(d) {
+    try { localStorage.setItem(HOURS_CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+
+  function openHoursModal() {
+    gaEvent("view_hours", {});
+    const m = $("#hours-modal");
+    const meta = $("#hours-meta");
+    const body = $("#hours-body");
+    m.hidden = false;
+    document.body.style.overflow = "hidden";
+    body.innerHTML = "";
+    if (hoursData) {
+      meta.textContent = hoursMetaLine(hoursData);
+      renderHours(hoursData, body);
+      return;
+    }
+    const cached = loadHoursCache();
+    if (cached) {
+      hoursData = cached;
+      meta.textContent = hoursMetaLine(cached) + " · cached";
+      renderHours(cached, body);
+    } else {
+      meta.textContent = "";
+      body.appendChild(el("div", "status", "Loading dining hours…"));
+    }
+    // Always refresh in the background so the modal is current on next open
+    // (and populates the offline cache even when it was empty).
+    fetchHours()
+      .then((d) => {
+        if (hoursData && hoursData.fetched_at === d.fetched_at) return; // unchanged
+        hoursData = d;
+        saveHoursCache(d);
+        if (m.hidden) return; // modal closed in the meantime
+        meta.textContent = hoursMetaLine(d);
+        body.innerHTML = "";
+        renderHours(d, body);
+      })
+      .catch((err) => {
+        if (m.hidden || cached) return;
+        body.innerHTML = "";
+        body.appendChild(el("div", "empty", "Could not load dining hours."));
+        body.appendChild(el("div", "empty", err.message));
+      });
+  }
+  function closeHoursModal() {
+    $("#hours-modal").hidden = true;
+    document.body.style.overflow = "";
+  }
+  $("#hours-modal").addEventListener("click", (e) => { if (e.target.closest("[data-hours-close]")) closeHoursModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHoursModal(); });
+
+  function hoursMetaLine(d) {
+    const n = d.sections.reduce((a, s) => a + s.locations.length, 0);
+    const updated = d.fetched_at ? new Date(d.fetched_at).toLocaleDateString() : "";
+    return n + " locations" + (updated ? " · updated " + updated : "");
+  }
+
+  function renderHours(d, body) {
+    for (const sec of d.sections) {
+      if (!sec.locations.length) continue;
+      body.appendChild(el("h3", "hours-sec", sec.name));
+      for (const loc of sec.locations) {
+        body.appendChild(renderHoursLocation(loc));
+      }
+    }
+  }
+
+  function renderHoursLocation(loc) {
+    const card = el("div", "hours-loc");
+    const head = el("div", "hours-loc-head");
+    head.appendChild(el("span", "hours-loc-name", loc.name));
+    if (loc.building) head.appendChild(el("span", "hours-loc-bld", loc.building));
+    card.appendChild(head);
+    // Flatten the hours groups (regular + special) into day rows; show the
+    // valid-dates window as a subtitle when present.
+    const daysEl = el("div", "hours-days");
+    for (const g of loc.hours || []) {
+      if (g.valid_dates) daysEl.appendChild(el("div", "hours-valid", g.valid_dates + (g.type === "special_hours" ? " (special)" : "")));
+      for (const day of g.days || []) {
+        const row = el("div", "hours-day" + (day.closed ? " closed" : ""));
+        row.appendChild(el("span", "hours-day-name", day.days));
+        if (day.closed) {
+          row.appendChild(el("span", "hours-day-slots", "Closed"));
+        } else {
+          const slots = (day.slots || []).map((s) => s.open && s.close ? s.open + "–" + s.close : (s.raw || "")).join(", ");
+          row.appendChild(el("span", "hours-day-slots", slots || "—"));
+        }
+        daysEl.appendChild(row);
+      }
+    }
+    card.appendChild(daysEl);
+    return card;
+  }
 
   /* ---------- controls ---------- */
 
