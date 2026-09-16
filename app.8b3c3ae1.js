@@ -23,6 +23,7 @@
     hallIndex: 0,
     view: "categories",   // "stations" | "categories" | "nutrition"
     cats: new Set(),     // empty = all; in categories view
+    showCarried: true,   // categories view: false hides "from breakfast" items
     query: "",
     loading: false,
   };
@@ -42,6 +43,9 @@
   const VIEW_KEY = "eas-view";       // "stations" | "categories" | "nutrition"
   const HALL_KEY = "eas-hall";       // hall name (index shifts when halls close, so persist by name)
   const CAT_STATE_KEY = "eas-cats-collapsed"; // [category id, ...] — collapsed set (Categories view)
+  const CARRIED_KEY = "eas-show-carried";     // "0"/"1" — carried items shown in Categories view
+  // Restore the "from breakfast" visibility switch (default: shown).
+  try { if (localStorage.getItem(CARRIED_KEY) === "0") state.showCarried = false; } catch (e) {}
   function isLight() { return document.documentElement.classList.contains("light"); }
   const ICON_M = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
   const ICON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
@@ -412,7 +416,11 @@
       const hall = (state.data.halls[state.hallIndex] || state.data.halls[0]);
       return hall && !hall.closed && !hall.error ? hallItems(hall) : [];
     })();
-    for (const e of entries) counts[e.item.cat] = (counts[e.item.cat] || 0) + 1;
+    const hasCarriedAll = entries.some((e) => e.item.carried);
+    // Counts reflect what will actually render (carried items drop out when
+    // the switch is off), so a category with only carried items hides its chip.
+    const countable = state.showCarried ? entries : entries.filter((e) => !e.item.carried);
+    for (const e of countable) counts[e.item.cat] = (counts[e.item.cat] || 0) + 1;
     const all = el("button", "cat-chip" + (state.cats.size === 0 ? " active" : ""));
     all.textContent = "All";
     all.addEventListener("click", () => { state.cats.clear(); renderCatRow(); renderContentOnly(); });
@@ -429,6 +437,23 @@
         renderCatRow(); renderContentOnly();
       });
       row.appendChild(b);
+    }
+    // "From breakfast" visibility switch — only offered when the scope
+    // actually contains carried-over items.
+    if (hasCarriedAll) {
+      const w = el("button", "switch" + (state.showCarried ? " on" : ""));
+      w.type = "button";
+      w.setAttribute("role", "switch");
+      w.setAttribute("aria-checked", String(state.showCarried));
+      w.title = state.showCarried ? "Hide items also in breakfast" : "Show items also in breakfast";
+      w.appendChild(el("span", "sw-track"));
+      w.appendChild(el("span", "sw-label", "from breakfast"));
+      w.addEventListener("click", () => {
+        state.showCarried = !state.showCarried;
+        try { localStorage.setItem(CARRIED_KEY, state.showCarried ? "1" : "0"); } catch (e) {}
+        renderCatRow(); renderContentOnly();
+      });
+      row.appendChild(w);
     }
   }
 
@@ -728,14 +753,17 @@
     const searching = !!q;
     // Search spans all halls; otherwise the selected hall only.
     let entries;
+    const hideCarried = !state.showCarried;
     if (searching) {
       entries = allHallItems().filter((e) =>
-        (state.cats.size === 0 || state.cats.has(e.item.cat)) && matches(q, e));
+        (state.cats.size === 0 || state.cats.has(e.item.cat)) && matches(q, e) &&
+        (!hideCarried || !e.item.carried));
     } else {
       const hall = selectedHall(c);
       if (!hall) return;
       entries = hallItems(hall).filter((e) =>
-        (state.cats.size === 0 || state.cats.has(e.item.cat)) && matches(q, e));
+        (state.cats.size === 0 || state.cats.has(e.item.cat)) && matches(q, e) &&
+        (!hideCarried || !e.item.carried));
     }
     if (!entries.length) { c.appendChild(el("div", "empty", "No dishes match your search.")); return; }
     const byCat = {};

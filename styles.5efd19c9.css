@@ -303,6 +303,35 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent2) 12%, var(--chip));
 }
+/* "From breakfast" visibility switch — inline with the category chips.
+   ON (default) shows carried items; OFF hides them from this view. */
+.switch {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 11px 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font-size: .8rem; font-weight: 500;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .05s ease;
+}
+.switch:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--text); }
+.switch:active { transform: translateY(1px); }
+.switch.on { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.sw-track {
+  position: relative; flex: 0 0 auto;
+  width: 30px; height: 17px; border-radius: 999px;
+  background: var(--line);
+  transition: background .18s ease;
+}
+.sw-track::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--muted);
+  transition: transform .18s ease, background .18s ease;
+}
+.switch.on .sw-track { background: var(--accent); }
+.switch.on .sw-track::after { transform: translateX(13px); background: #06231a; }
 
 .search-wrap { position: relative; width: 100%; }
 .search-ico {
