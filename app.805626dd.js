@@ -480,10 +480,10 @@
     return wrap;
   }
 
-  function makeItemButton(entry) {
+  function makeItemButton(entry, opts) {
     const b = el("button", "item" + (entry.item.cat === "entree" ? " entree" : "") + (entry.item.carried ? " carried" : ""));
     b.appendChild(document.createTextNode(entry.item.name));
-    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.carried && !(opts && opts.hideCarriedTag)) b.appendChild(el("span", "carried-tag", "from breakfast"));
     b.appendChild(proteinIcons(entry.item));
     if (entry.item.calories) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     b.appendChild(itemBadge(entry.item.cat));
@@ -591,6 +591,22 @@
     try { localStorage.setItem(CAT_STATE_KEY, JSON.stringify(Array.from(s))); }
     catch (e) {}
   }
+  // "Also in breakfast" groups (Stations view): collapsed by default; this
+  // stores which halls' groups the user has expanded.
+  const BF_STATE_KEY = "eas-bfgroup-expanded"; // ["<hall>||__breakfast__", ...] — expanded set
+  function bfGroupExpanded() {
+    try {
+      const v = JSON.parse(localStorage.getItem(BF_STATE_KEY) || "[]");
+      return new Set(Array.isArray(v) ? v : Object.keys(v));
+    }
+    catch (e) { return new Set(); }
+  }
+  function setBfGroupExpanded(key, expanded) {
+    const s = bfGroupExpanded();
+    if (expanded) s.add(key); else s.delete(key);
+    try { localStorage.setItem(BF_STATE_KEY, JSON.stringify(Array.from(s))); }
+    catch (e) {}
+  }
 
   function renderStations() {
     const c = $("#content");
@@ -603,22 +619,30 @@
       : [selectedHall(c)];
     if (!searching && !halls[0]) return;
     const collapsed = stationCollapsed();
+    const bfExpanded = bfGroupExpanded();
     let shown = 0;
     for (const hall of halls) {
       if (!hall) continue;
       const byStation = {};
       const order = [];
+      const carriedItems = [];
       for (const s of hall.stations) {
-        const items = s.items.filter((it) => matches(q, { item: it, hall: hall.name, station: s.name }));
-        if (!items.length) continue;
-        if (!byStation[s.name]) { byStation[s.name] = { group: s.group, items: [] }; order.push(s.name); }
-        byStation[s.name].items.push(...items);
-        shown += items.length;
+        for (const it of s.items) {
+          const e = { item: it, hall: hall.name, station: s.name };
+          if (!matches(q, e)) continue;
+          // Carried-over breakfast items move to their own collapsible group
+          // instead of living inside their stations.
+          if (it.carried) { carriedItems.push(e); continue; }
+          if (!byStation[s.name]) { byStation[s.name] = { group: s.group, items: [] }; order.push(s.name); }
+          byStation[s.name].items.push(e);
+        }
+        shown += byStation[s.name] ? byStation[s.name].items.length : 0;
       }
       // In global search the hall earns a header; otherwise the station name
       // leads, exactly like the normal Stations view.
       for (const name of order) {
         const st = byStation[name];
+        if (!st.items.length) continue;
         const key = hall.name + "||" + name;
         const box = el("section", "station");
         const head = el("button", "station-head");
@@ -639,12 +663,44 @@
         head.appendChild(chev);
         box.appendChild(head);
         const ul = el("ul", "items");
-        for (const it of st.items) ul.appendChild(makeItemButton({ item: it, hall: hall.name, station: name }));
+        for (const it of st.items) ul.appendChild(makeItemButton(it));
         box.appendChild(ul);
         head.addEventListener("click", () => {
           const nowCollapsed = box.classList.toggle("collapsed");
           head.setAttribute("aria-expanded", String(!nowCollapsed));
           setStationCollapsed(key, nowCollapsed);
+        });
+        c.appendChild(box);
+      }
+      // "Also in breakfast" group: collapsed by default so carried items stay
+      // visible-but-unobtrusive; expanding a hall's group is remembered.
+      if (carriedItems.length) {
+        shown += carriedItems.length;
+        const key = hall.name + "||__breakfast__";
+        const expanded = bfExpanded.has(key);
+        const box = el("section", "station carried-group" + (expanded ? "" : " collapsed"));
+        const head = el("button", "station-head");
+        head.type = "button";
+        head.setAttribute("aria-expanded", String(expanded));
+        if (searching) {
+          head.appendChild(el("span", "station-name", hall.name));
+          head.appendChild(el("span", "station-group", "Also in breakfast  (" + carriedItems.length + ")"));
+        } else {
+          head.appendChild(el("span", "station-name", "Also in breakfast"));
+          head.appendChild(el("span", "station-group", "(" + carriedItems.length + ")"));
+        }
+        const chev = el("span", "chev");
+        chev.innerHTML = CHEV;
+        chev.setAttribute("aria-hidden", "true");
+        head.appendChild(chev);
+        box.appendChild(head);
+        const ul = el("ul", "items");
+        for (const it of carriedItems) ul.appendChild(makeItemButton(it, { hideCarriedTag: true }));
+        box.appendChild(ul);
+        head.addEventListener("click", () => {
+          const nowExpanded = !box.classList.toggle("collapsed");
+          head.setAttribute("aria-expanded", String(nowExpanded));
+          setBfGroupExpanded(key, nowExpanded);
         });
         c.appendChild(box);
       }
