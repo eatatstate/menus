@@ -481,8 +481,9 @@
   }
 
   function makeItemButton(entry) {
-    const b = el("button", "item" + (entry.item.cat === "entree" ? " entree" : ""));
+    const b = el("button", "item" + (entry.item.cat === "entree" ? " entree" : "") + (entry.item.carried ? " carried" : ""));
     b.appendChild(document.createTextNode(entry.item.name));
+    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
     b.appendChild(proteinIcons(entry.item));
     if (entry.item.calories) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     b.appendChild(itemBadge(entry.item.cat));
@@ -654,8 +655,9 @@
   // Item button for a "list" section (cat-section/cat-list): name, protein
   // icons, station/hall tag, category badge. Used by Categories and Nutrition.
   function makeListItemButton(entry, searching) {
-    const b = el("button", "item");
+    const b = el("button", "item" + (entry.item.carried ? " carried" : ""));
     b.appendChild(document.createTextNode(entry.item.name));
+    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
     b.appendChild(proteinIcons(entry.item));
     b.appendChild(el("span", "hall-tag", entryTag(entry, searching)));
     b.appendChild(itemBadge(entry.item.cat));
@@ -778,6 +780,7 @@
     catDiv.appendChild(el("span", "hall-tag", entry.hall + " · " + entry.station));
     const meta = [];
     if (it.calories) meta.push(Math.round(it.calories) + " calories");
+    if (it.carried && state.meal !== "breakfast") meta.push("also in breakfast");
     $("#modal-meta").textContent = meta.join(" · ");
     $("#modal-desc").textContent = it.desc || "";
     $("#modal-desc").hidden = !it.desc;
