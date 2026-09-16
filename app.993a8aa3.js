@@ -247,6 +247,7 @@
       const found = await findMealData(meal);
       if (seq !== undefined && seq !== reqSeq) return; // superseded
       if (!found) {
+        hideSplash();
         const c = $("#content");
         c.innerHTML = "";
         c.appendChild(el("div", "empty",
@@ -316,6 +317,7 @@
   }
 
   function showError(msg) {
+    hideSplash();
     state.data = null;
     $("#hall-row").innerHTML = "";
     $("#cat-row").hidden = true;
@@ -325,6 +327,27 @@
     d.appendChild(el("div", null, msg));
     d.appendChild(el("div", null, "Check your connection and pull to refresh."));
     $("#content").appendChild(d);
+  }
+
+  /* ---------- splash ---------- */
+
+  // Sparty dinner-reveal splash: visible while the first meal is loading.
+  // Hides on the first successful render (any data source) or on a terminal
+  // error, and is never shown again within the session.
+  let splashHidden = false;
+  function setSplashMeal(meal) {
+    const t = document.getElementById("splash-meal-title");
+    if (t) t.textContent = "Today's " + meal.charAt(0).toUpperCase() + meal.slice(1);
+  }
+  function hideSplash() {
+    if (splashHidden) return;
+    splashHidden = true;
+    const s = document.getElementById("splash");
+    if (!s) return;
+    s.classList.add("hide");
+    s.addEventListener("transitionend", () => s.remove(), { once: true });
+    // Belt-and-braces: never leave a stuck overlay (e.g. transition suppressed).
+    setTimeout(() => { if (s.isConnected) s.remove(); }, 1200);
   }
 
   function showOffline(on) {
@@ -348,6 +371,7 @@
 
   function render() {
     if (!state.data) return;
+    hideSplash();
     renderChrome();
     renderHallRow();
     renderCatRow();
@@ -1067,6 +1091,7 @@
   }
 
   const initialMeal = defaultMeal();
+  setSplashMeal(initialMeal); // splash title follows the time-of-day default
   if (initialMeal !== state.meal) {
     setMeal(initialMeal);
   } else {

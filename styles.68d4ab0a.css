@@ -65,6 +65,85 @@ body::after {
   background-size: 192px 192px;
 }
 html.light body::after { opacity: .015; }
+
+/* ---------- Splash: Sparty dinner reveal (shown while the first meal loads) ---------- */
+.splash {
+  position: fixed; inset: 0; z-index: 500;
+  display: grid; place-items: center;
+  /* Matches the SVG's own bg radial so letterbox bands (meet scaling) blend. */
+  background: radial-gradient(circle at 50% 42%, #0f684f 0%, #064536 52%, #012d25 100%);
+  pointer-events: none;
+  transition: opacity 500ms ease, visibility 0s linear 500ms;
+}
+.splash.hide { opacity: 0; visibility: hidden; }
+.splash svg { width: 100%; height: 100%; display: block; }
+
+#layer-sparty {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: spartyEnter 900ms cubic-bezier(.2,.85,.25,1) both, spartyFloat 2.6s 900ms ease-in-out infinite;
+}
+#layer-cloche {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: clocheReveal 1100ms 250ms cubic-bezier(.16,.9,.28,1.15) both;
+}
+#layer-steam path { animation: steamRise 1.8s ease-in-out infinite; }
+#layer-steam path:nth-child(2) { animation-delay: 250ms; }
+#layer-steam path:nth-child(3) { animation-delay: 500ms; }
+#layer-dinner {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: dinnerPop 800ms 800ms cubic-bezier(.2,1.35,.35,1) both;
+}
+#layer-accents {
+  transform-origin: center;
+  animation: accents 1.4s 500ms ease-out both;
+}
+#halo-ring {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: haloPulse 2.2s ease-in-out infinite;
+}
+#progress-fill { animation: progress 1.9s ease-in-out infinite; }
+
+@keyframes spartyEnter {
+  from { opacity: 0; transform: translateY(36px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes spartyFloat {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes clocheReveal {
+  0% { opacity: 0; transform: rotate(-28deg) translate(55px, 80px); }
+  70% { opacity: 1; transform: rotate(-2deg) translate(-4px, -8px); }
+  100% { opacity: 1; transform: rotate(-6deg) translate(0, 0); }
+}
+@keyframes steamRise {
+  0% { opacity: 0; transform: translateY(18px) scale(.96); }
+  35% { opacity: .8; }
+  100% { opacity: 0; transform: translateY(-48px) scale(1.05); }
+}
+@keyframes dinnerPop {
+  0% { opacity: 0; transform: translateY(18px) scale(.86); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1.035); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes accents {
+  from { opacity: 0; transform: scale(.7) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes haloPulse {
+  0%,100% { opacity: .65; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.035); }
+}
+@keyframes progress {
+  0% { width: 55px; }
+  65% { width: 300px; }
+  100% { width: 330px; }
+}
+
 button { font: inherit; cursor: pointer; }
 :focus-visible {
   outline: 2px solid var(--accent);
