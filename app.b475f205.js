@@ -7,6 +7,10 @@
     entree: "Entrees", side: "Sides", grain: "Grains",
     salad: "Salads", dessert: "Desserts", beverage: "Beverages", other: "Other",
   };
+  const CAT_EMOJI = {
+    entree: "\u{1F37D}\uFE0F", side: "\u{1F35F}", grain: "\u{1F35E}",
+    salad: "\u{1F957}", dessert: "\u{1F370}", beverage: "\u{1F964}", other: "\u{1F9C2}",
+  };
   const STORE_KEY = "eas-lunch-cache";
 
   // Static (GitHub Pages) mode: no backend, load the latest snapshot from
@@ -492,6 +496,7 @@
       if (!counts[c]) continue;
       const b = el("button", "cat-chip" + (state.cats.has(c) ? " active" : ""));
       b.innerHTML = "";
+      b.appendChild(document.createTextNode(CAT_EMOJI[c] + " "));
       b.appendChild(document.createTextNode(CAT_LABEL[c]));
       b.appendChild(el("span", "n", String(counts[c])));
       b.addEventListener("click", () => {
@@ -535,13 +540,65 @@
     return b;
   }
 
+  /* ---------- food-kind emoji (from dish names; first match wins, none = no emoji) ---------- */
+
+      const FOOD_KINDS = [
+    { id: "coffee", emoji: "☕", re: /\b(coffee|coffee ?mate|coffees?mate|latte|espresso|cappuccino|hot ?choc|cocoa|chocolate ?milk|decaf)\b/i },
+    { id: "soda", emoji: "🥤", re: /\b(coke|pepsi|sprite|fanta|ginger ?ale|root ?beer|powerade|gatorade|slurpee|dr ?pepper|mountain ?dew|7-? ?up|barq|soda|pop)\b/i },
+    { id: "drink", emoji: "🧃", re: /\b(juice|lemonade|smoothie|iced ?tea|tea|kombucha|water|punch|ade|cocktail|coconut ?water|berry ?blend)\b/i },
+    { id: "cereal", emoji: "🥣", re: /\b(cereal|cereals|granola|oat ?meal|oats?|porridge|flakes|loops|puffs|charms|jacks|chex|grahams|bran|cheerios|special ?k|crunch|pebbles|musli|muesli|nature valley|cinnamon toast)\b/i },
+    { id: "icecream", emoji: "🍦", re: /\b(ice ?cream|soft ?serve|frozen ?yogurt|cones?|sorbet)\b/i },
+    { id: "cake", emoji: "🍰", re: /\b(cakes?|cheesecake|cupcakes?|muffins?|pie|brownies?|puddings?|jello|custard|flan|trifle|cobbler|parfait)\b/i },
+    { id: "sweet", emoji: "🍩", re: /\b(donuts?|cookies?|whoopie|candy|chocolate|gummi|gummies?|marshmallows?|sprinkles|m&ms?|tootsie|peppermint|lollipop|licorice|peanut ?butter ?cups?|fudge|snickers|twix|skittles|star ?burst|reese|3 ?musketeers|jolly ranchers?|caramel)\b/i },
+    { id: "yogurt", emoji: "🥛", re: /\b(yogurt|yoghurt)\b/i },
+    { id: "vegan", emoji: "🌱", re: /\b(tofu|tempeh|seitan|edamame|vegan|veg ?gie|vegetarian|jackfruit)\b/i },
+    { id: "chicken", emoji: "🍗", re: /\b(chicken|chick'n|turkey|drumstick|wings?)\b/i },
+    { id: "beef", emoji: "🥩", re: /\b(lamb|beef|steak|roast ?beef|brisket|ribs?|salami|prosciutto|pastrami|corned ?beef|pepperoni|meat)\b/i },
+    { id: "pork", emoji: "🐖", re: /\b(pork|ham)\b/i },
+    { id: "fish", emoji: "🐟", re: /\b(fish|whitefish|salmon|tuna|cod|tilapia|trout|mackerel|anchov(y|ies)|sardines?|pollock)\b/i },
+    { id: "shellfish", emoji: "🦐", re: /\b(shrimp|prawn|crab|lobster|scallop|calamari)\b/i },
+    { id: "bacon", emoji: "🥓", re: /\b(bacon)\b/i },
+    { id: "burger", emoji: "🍔", re: /\b(burgers?|cheeseburgers?|hamburgers?)\b/i },
+    { id: "sausage", emoji: "🌭", re: /\b(sausages?|chorizo|andouille|hot ?dog|frankfurter|patties?)\b/i },
+    { id: "sandwich", emoji: "🥪", re: /\b(sandwiches?|subs?|wraps?|panini|pitas?|club ?house|egg ?rolls?)\b/i },
+    { id: "pizza", emoji: "🍕", re: /\b(pizza)\b/i },
+    { id: "mexican", emoji: "🌮", re: /\b(tacos?|burrito|nachos?|fajita|quesadilla|enchilada|tortilla|guacamole|pico ?de ?gallo)\b/i },
+    { id: "salad", emoji: "🥗", re: /\b(salads?|coleslaw)\b(?!\s+dressing)/i },
+    { id: "soup", emoji: "🍲", re: /\b(soups?|stew|chili|bisque|chowder|pakora|curry)\b/i },
+    { id: "beans", emoji: "🫘", re: /\b(bean|beans|lentils?|chickpeas?|hummus|falafels?)\b/i },
+    { id: "potato", emoji: "🥔", re: /\b(potato|potatoes?|fries|frites|mashed|gratin|hash ?browns?|taters?)\b/i },
+    { id: "noodle", emoji: "🍜", re: /\b(pad thai|ramen|sushi|dumplings?|spring ?rolls?|lo ?mein|chow ?mein|pho|udon|soba)\b/i },
+    { id: "pasta", emoji: "🍝", re: /\b(pasta|macaroni|spaghetti|noodles?|penne|fettuccine|lasagna|gnocchi|orzo|farfalle|couscous)\b/i },
+    { id: "rice", emoji: "🍚", re: /\b(rice|basmati|quinoa)\b/i },
+    { id: "egg", emoji: "🥚", re: /\b(eggs?)\b/i },
+    { id: "cheese", emoji: "🧀", re: /\b(cheese|queso)\b/i },
+    { id: "dairy", emoji: "🧈", re: /\b(butter|buttermilk|milk|cream|sour ?cream|half and half)\b/i },
+    { id: "bread", emoji: "🍞", re: /\b(bread|bagels?|croissant|buns?|rolls?|biscuits?|crackers?|croutons|baguette|naan|focaccia|ciabatta|waffles?|pancakes?|french toast|grinder|powerseed|seeded)\b/i },
+    { id: "fruit", emoji: "🍎", re: /\b(apples?|applesauce|bananas?|oranges?|grapes?|melons?|watermelon|strawberries?|blueberries?|peaches?|pears?|cherries?|pineapple|mango|kiwi|berries?|fruit|raisins?|apricots?|nectarine|cantaloupe|honeydew|cranberries?|pomegranate|coconut|dates?|clementines?)\b/i },
+    { id: "citrus", emoji: "🍋", re: /\b(lemon|lime|orange|grapefruit)\b/i },
+    { id: "veg", emoji: "🥦", re: /\b(broccoli|cauliflower|carrots?|corn|spinach|kale|lettuce|onions?|tomatoes?|peppers?|jalapenos?|squash|zucchini|cucumbers?|beets?|mushrooms?|celery|peas|asparagus|artichoke|avocado|green ?beans?|romaine|vegetables?|veggies?|greens?|sprouts?|olives?|radishes?|turnip|arugula|almonds?|nuts?|peanuts?|cashews?|walnuts?|spring ?mix|sprout ?mix|bok ?choy|garlic|giardiniera|cilantro|pepperoncinis?)\b/i },
+    { id: "condiment", emoji: "🧂", re: /\b(ketchup|mustard|mayo|mayonnaise|jelly|jam|preserves|sauces?|dressing|salsa|vinaigrette|glaze|oil|vinegar|honey|salt|pretzels?|dips?|packets?|sugar|equal|sweetener|flavoring|tamari|soy|pickles?|pickled|seeds?|ginger|peanut ?butter|sunbutter|aioli|tabasco|chipotle|pesto|marinara|chili ?crisp|toppings?|cheetos?|ruffles?|lays?|wasabi|nori|furikake)\b/i }
+  ];
+function foodEmoji(name) {
+    const n = name || "";
+    for (const k of FOOD_KINDS) if (k.re.test(n)) return k.emoji;
+    return "";
+  }
+  function foodEmojiSpan(item) {
+    const e = foodEmoji(item.name);
+    if (!e) return null;
+    const s = el("span", "dish-emoji");
+    s.textContent = e;
+    s.setAttribute("aria-hidden", "true");
+    return s;
+  }
+
   /* ---------- protein detection (from dish names; data has no such field) ---------- */
 
   const PROTEINS = [
     { id: "beef",      label: "Beef",      emoji: "🥩", re: /\b(beef|steak|hamburg?er|roast beef)\b/i },
-    { id: "pork",      label: "Pork",      emoji: "🥓", re: /\b(pork|sausage|bacon)\b|\bham\b(?!\w*burger)/i },
-    { id: "lamb",      label: "Lamb",      emoji: "🐑", re: /\blamb\b/i },
-    { id: "poultry",   label: "Poultry",   emoji: "🍗", re: /\b(chicken|turkey|drumstick|thighs?)\b/i },
+    { id: "pork",      label: "Pork",      emoji: "🐖", re: /\b(pork|sausage|bacon)\b|\bham\b(?!\w*burger)/i },
+    { id: "lamb",      label: "Lamb",      emoji: "🐑", re: /\blamb\b/i },    { id: "poultry",   label: "Poultry",   emoji: "🍗", re: /\b(chicken|turkey|drumstick|thighs?)\b/i },
     { id: "fish",      label: "Fish",      emoji: "🐟", re: /\b(fish|salmon|tuna|cod|tilapia|trout|mackerel)\b/i },
     { id: "shellfish", label: "Shellfish", emoji: "🍤", re: /\b(shrimp|prawn|crab|lobster|scallop|calamari)\b/i },
     { id: "vegan",     label: "Vegan",     emoji: "🌱", re: /\b(tofu|tempeh|seitan|edamame|falafels?|lentils?|chickpeas?|quinoa|black beans?|kidney beans?|navy beans?|beans?)\b/i },
@@ -560,22 +617,13 @@
     }
     return out;
   }
-  function proteinIcons(item) {
-    const wrap = el("span", "protein-icons");
-    for (const p of detectProteins(item.name)) {
-      const s = el("span", "protein");
-      s.textContent = p.emoji;
-      s.title = p.label;
-      wrap.appendChild(s);
-    }
-    return wrap;
-  }
 
   function makeItemButton(entry, opts) {
     const b = el("button", "item" + (entry.item.cat === "entree" ? " entree" : "") + (entry.item.carried ? " carried" : ""));
+    const fe = foodEmojiSpan(entry.item);
+    if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
     if (entry.item.carried && !(opts && opts.hideCarriedTag)) b.appendChild(el("span", "carried-tag", "from breakfast"));
-    b.appendChild(proteinIcons(entry.item));
     if (entry.item.calories) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     b.appendChild(itemBadge(entry.item.cat));
     b.addEventListener("click", () => openModal(entry));
@@ -803,9 +851,10 @@
   // icons, station/hall tag, category badge. Used by Categories and Nutrition.
   function makeListItemButton(entry, searching) {
     const b = el("button", "item" + (entry.item.carried ? " carried" : ""));
+    const fe = foodEmojiSpan(entry.item);
+    if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
     if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
-    b.appendChild(proteinIcons(entry.item));
     b.appendChild(el("span", "hall-tag", entryTag(entry, searching)));
     b.appendChild(itemBadge(entry.item.cat));
     b.addEventListener("click", () => openModal(entry));
@@ -846,7 +895,7 @@
       head.type = "button";
       head.setAttribute("aria-expanded", String(!collapsed.has(cat)));
       const label = el("span", "cat-head-label");
-      label.textContent = CAT_LABEL[cat] + "  (" + list.length + ")";
+      label.textContent = CAT_EMOJI[cat] + " " + CAT_LABEL[cat] + "  (" + list.length + ")";
       head.appendChild(label);
       const chev = el("span", "chev");
       chev.innerHTML = CHEV;
@@ -922,8 +971,11 @@
     });
     const m = $("#modal");
     const it = entry.item;
-    $("#modal-title").textContent = it.name;
-    $("#modal-title").appendChild(proteinIcons(it));
+    const mt = $("#modal-title");
+    mt.textContent = "";
+    const fe = foodEmojiSpan(it);
+    if (fe) { fe.classList.add("big"); mt.appendChild(fe); }
+    mt.appendChild(document.createTextNode(it.name));
     const catDiv = $("#modal-cat");
     catDiv.innerHTML = "";
     catDiv.appendChild(itemBadge(it.cat));

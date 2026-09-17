@@ -696,3 +696,7 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .about-feedback:hover { filter: brightness(1.08); }
 .about-feedback:active { transform: translateY(1px); }
 .about-feedback svg { width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* food-kind emoji (app.js foodEmoji) — leading glyph on dish rows */
+.dish-emoji { margin-right: 6px; }
+#modal-title .dish-emoji.big { font-size: 1.6em; margin-right: 8px; }
