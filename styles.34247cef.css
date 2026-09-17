@@ -94,15 +94,6 @@ button { font: inherit; cursor: pointer; }
 }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .meal-seg { flex-wrap: wrap; }
-@media (max-width: 480px) {
-  /* Single row: title + meal tabs + more (refresh lives in the menu). */
-  .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
-  .topbar-actions { width: auto; justify-content: flex-end; }
-  .brand-mark { display: none; }
-  .brand h1 { font-size: .95rem; white-space: nowrap; }
-  .meal-seg .seg-btn { padding: 6px 7px; font-size: .78rem; white-space: nowrap; }
-  .icon-btn { width: 34px; min-height: 0; font-size: 1rem; }
-}
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
   font-size: 1.5rem;
@@ -121,12 +112,28 @@ button { font: inherit; cursor: pointer; }
   min-height: 36px;
   align-self: stretch; /* grow to the row's height (= chip/seg height) instead of a fixed 40px */
   display: grid; place-items: center;
+  padding: 0; /* UA button padding varies by engine — zero it so centering is exact */
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
   font-size: 1.15rem;
   line-height: 1;
+}
+@media (max-width: 480px) {
+  /* Single row: title + meal tabs + more (refresh lives in the menu).
+     Placed after the base rules so it actually wins the cascade. */
+  .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
+  .topbar-actions { width: auto; justify-content: flex-end; }
+  .brand-mark { display: none; }
+  .brand-sub { display: none; } /* date is redundant on phones — the footer shows "Updated …" */
+  .brand h1 { font-size: .95rem; white-space: nowrap; }
+  .icon-btn { width: 36px; min-height: 0; font-size: 1rem; align-self: center; }
+}
+@media (max-width: 360px) {
+  /* Extra-small (SE/5): icon-only brand so the meal tabs always fit one row. */
+  .brand h1 { display: none; }
+  .brand-mark { display: grid; width: 34px; height: 34px; font-size: 1.2rem; }
 }
 [hidden] { display: none !important; }
 .skip-link {
@@ -241,7 +248,18 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 }
 .controls .seg { flex: 0 1 auto; }
 #search-toggle { margin-left: auto; flex: 0 0 auto; order: 2; }
-.cat-row { flex-basis: 100%; order: 3; }
+.cat-row-wrap { flex-basis: 100%; order: 3; position: relative; min-width: 0; /* let the inner cat-row scroll instead of inflating the row */ }
+/* Right-edge fade on the category row: shown while more chips are hidden
+   to the right, removed at the end of the row (JS toggles .fade). */
+.cat-row-wrap::after {
+  content: "";
+  position: absolute; top: 0; right: 0; bottom: 0; width: 20px;
+  background: linear-gradient(to right, transparent, var(--bg));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.cat-row-wrap.fade::after { opacity: 1; }
 /* Search row lives inside .controls: on desktop it takes the space between
    the view-mode segment and the search button (input left of the button);
    on mobile it wraps to a full-width row below the button. The category
@@ -250,6 +268,10 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 @media (max-width: 640px) {
   #search-toggle { order: 1; }
   .search-row { flex: 1 1 100%; order: 2; }
+  /* Compact sticky stack: tighter padding/gaps (cat-row below the base rules). */
+  .hall-row { padding: 8px 12px 2px; }
+  .hall-chip { padding: 6px 12px; }
+  .controls { padding: 2px 12px 0; gap: 6px; }
 }
 .seg {
   display: inline-flex;
@@ -279,7 +301,7 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   font-weight: 600;
 }
 @media (max-width: 400px) {
-  .seg-btn { padding: 7px 8px; font-size: .78rem; }
+  .seg-btn { padding: 6px 8px; font-size: .78rem; }
 }
 .cat-row {
   display: flex; gap: 6px; flex-wrap: wrap;
@@ -302,6 +324,19 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   border-color: var(--accent2);
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent2) 12%, var(--chip));
+}
+@media (max-width: 640px) {
+  /* One scrollable chip row instead of three wrapped rows — the big win in
+     the sticky-stack height (placed after the base rules so it wins). */
+  .cat-row {
+    flex-wrap: nowrap; overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 6px; /* room below the chips for the edge fade */
+  }
+  .cat-row::-webkit-scrollbar { display: none; }
+  .cat-chip { flex: 0 0 auto; padding: 5px 10px; }
+  .switch { flex: 0 0 auto; padding: 5px 10px 5px 8px; }
 }
 /* "From breakfast" visibility switch — inline with the category chips.
    ON (default) shows carried items; OFF hides them from this view. */
@@ -566,10 +601,14 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .modal-close {
   position: absolute; top: 12px; right: 12px;
   width: 32px; height: 32px; border-radius: 50%;
+  display: grid;
+  justify-content: center;
+  align-items: center;
+  padding: 0; /* UA button padding varies by engine — zero it so centering is exact */
   border: 1px solid var(--line);
   background: var(--panel); color: var(--muted); font-size: 1.1rem;
 }
-.modal-close svg { width: 16px; height: 16px; display: block; margin: auto; }
+.modal-close svg { width: 16px; height: 16px; display: block; }
 .modal-cat { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .modal-cat .hall-tag { color: var(--dim); font-size: .75rem; }
 .modal-card h2 { font-family: var(--font-display); margin: 0 0 4px; font-size: 1.45rem; font-weight: 700; letter-spacing: -.3px; }

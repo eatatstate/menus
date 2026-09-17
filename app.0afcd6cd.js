@@ -407,7 +407,7 @@
   function renderCatRow() {
     const row = $("#cat-row");
     row.innerHTML = "";
-    if (state.view !== "categories") { row.hidden = true; return; }
+    if (state.view !== "categories") { row.hidden = true; syncCatFade(); return; }
     row.hidden = false;
     const counts = {};
     // Counts follow the content scoping: all halls while searching,
@@ -455,6 +455,9 @@
       });
       row.appendChild(w);
     }
+    // Chip set changed: reset scroll and refresh the edge-fade hint.
+    row.scrollLeft = 0;
+    syncCatFade();
   }
 
   function renderContentOnly() {
@@ -1114,19 +1117,37 @@
     new ResizeObserver(syncStickbarTop).observe(topbar);
   }
 
-  // Desktop: horizontal-scroll the hall row with the mouse wheel
-  // (touch already scrolls natively).
+  // Horizontal-scroll a chip row with the mouse wheel (desktop); touch
+  // scrolls natively. Applied to the hall row and the category row.
+  function wheelScrollRow(row) {
+    row.addEventListener("wheel", (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // already horizontal
+      const max = row.scrollWidth - row.clientWidth;
+      if (max <= 0) return;
+      const atStart = row.scrollLeft <= 0 && e.deltaY < 0;
+      const atEnd = row.scrollLeft >= max && e.deltaY > 0;
+      if (atStart || atEnd) return; // let the page scroll at the edges
+      row.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+  }
   const hallRow = $("#hall-row");
-  if (hallRow) hallRow.addEventListener("wheel", (e) => {
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // already horizontal
-    const max = hallRow.scrollWidth - hallRow.clientWidth;
-    if (max <= 0) return;
-    const atStart = hallRow.scrollLeft <= 0 && e.deltaY < 0;
-    const atEnd = hallRow.scrollLeft >= max && e.deltaY > 0;
-    if (atStart || atEnd) return; // let the page scroll at the edges
-    hallRow.scrollLeft += e.deltaY;
-    e.preventDefault();
-  }, { passive: false });
+  if (hallRow) wheelScrollRow(hallRow);
+  const catRow = $("#cat-row");
+  if (catRow) wheelScrollRow(catRow);
+
+  // Category-row edge fade: hint that more chips are off-screen to the
+  // right; hidden at the end of the row or when nothing overflows.
+  const catWrap = $("#cat-row-wrap");
+  function syncCatFade() {
+    if (!catWrap || !catRow || catRow.hidden) { if (catWrap) catWrap.classList.remove("fade"); return; }
+    const max = catRow.scrollWidth - catRow.clientWidth;
+    catWrap.classList.toggle("fade", max > 1 && catRow.scrollLeft < max - 1);
+  }
+  if (catRow) {
+    catRow.addEventListener("scroll", syncCatFade, { passive: true });
+    window.addEventListener("resize", syncCatFade);
+  }
 
   // Default meal by local time: 9:00–11:00 breakfast, 11:00–16:30 lunch,
   // 16:30–21:00 dinner (3:00–4:30 is lunch per menu hours); before 9:00
