@@ -92,8 +92,8 @@ button { font: inherit; cursor: pointer; }
   padding: 10px 16px;
   gap: 10px;
 }
-.topbar-actions { display: flex; align-items: center; gap: 8px; }
-.meal-seg { flex-wrap: wrap; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; position: relative; /* anchors the dropdown */ }
+.meal-seg { flex-wrap: nowrap; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
   font-size: 1.5rem;
@@ -120,23 +120,29 @@ button { font: inherit; cursor: pointer; }
   font-size: 1.15rem;
   line-height: 1;
 }
+/* Meal button: shows the active meal + date; tapping opens the menu
+   (which holds the meal picker). Two classes → beats the .icon-btn
+   width override in the media block below. */
+.icon-btn.meal-btn {
+  width: auto;
+  padding: 0 10px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.icon-btn.meal-btn .meal-date { color: var(--muted); font-weight: 500; }
 @media (max-width: 480px) {
-  /* Single row: title + meal tabs + more (refresh lives in the menu).
+  /* Single row: title + meal button + more (meal picker lives in the menu).
      Placed after the base rules so it actually wins the cascade. */
   .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
   .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; }
-  /* Meal tabs must never wrap to a second row: if they don't fit (small
-     screens, larger iOS text sizes) they scroll horizontally. */
-  .meal-seg {
-    flex-wrap: nowrap; overflow-x: auto; min-width: 0;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .meal-seg::-webkit-scrollbar { display: none; }
   .brand-mark { display: none; }
   .brand-sub { display: none; } /* date is redundant on phones — the footer shows "Updated …" */
   .brand h1 { font-size: .95rem; white-space: nowrap; }
   .icon-btn { width: 36px; min-height: 0; font-size: 1rem; align-self: center; }
+  .icon-btn.meal-btn { width: auto; padding: 0 9px; } /* keep the meal button readable, not 36px */
 }
 @media (max-width: 360px) {
   /* Extra-small (SE/5): icon-only brand so the meal tabs always fit one row. */

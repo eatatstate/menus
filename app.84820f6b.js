@@ -97,26 +97,50 @@
     }
   }
 
+  const moreBtn = $("#more-btn");
+  const moreMenu = $("#more-menu");
+  const mealBtn = $("#meal-btn");
+  // The overflow menu opens from either the ⋮ button or the meal button
+  // (which shows the active meal + date and holds the meal picker inside).
+  function closeMoreMenu() {
+    if (!moreMenu) return;
+    moreMenu.classList.remove("open");
+    [moreBtn, mealBtn].forEach((b) => {
+      if (!b) return;
+      b.classList.remove("menu-open");
+      b.setAttribute("aria-expanded", "false");
+    });
+  }
+  function openMoreMenu() {
+    if (!moreMenu) return;
+    moreMenu.classList.add("open");
+    [moreBtn, mealBtn].forEach((b) => {
+      if (!b) return;
+      b.classList.add("menu-open");
+      b.setAttribute("aria-expanded", "true");
+    });
+  }
+  function toggleMoreMenu() {
+    moreMenu.classList.contains("open") ? closeMoreMenu() : openMoreMenu();
+  }
+
   function initMoreMenu() {
     // html.light already applied pre-paint by the head bootstrap.
-    const btn = $("#more-btn");
-    const menu = $("#more-menu");
-    function setOpen(open) {
-      menu.classList.toggle("open", open);
-      btn.classList.toggle("menu-open", open);
-      btn.setAttribute("aria-expanded", String(open));
-    }
-    btn.addEventListener("click", (e) => {
+    moreBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      setOpen(!menu.classList.contains("open"));
+      toggleMoreMenu();
+    });
+    mealBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleMoreMenu();
     });
     document.addEventListener("click", (e) => {
-      if (menu.classList.contains("open") && !menu.contains(e.target)) setOpen(false);
+      if (moreMenu.classList.contains("open") && !moreMenu.contains(e.target)) closeMoreMenu();
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") closeMoreMenu();
     });
-    window.addEventListener("resize", () => setOpen(false));
+    window.addEventListener("resize", () => closeMoreMenu());
 
     $("#menu-theme").addEventListener("click", () => {
       const next = isLight() ? "dark" : "light";
@@ -126,27 +150,27 @@
         else localStorage.setItem(THEME_KEY, "light");
       } catch (e) {}
       applyThemeMenu();
-      setOpen(false);
+      closeMoreMenu();
     });
     // Refresh is PWA-only: the static site has no live source to refetch.
     if (STATIC) $("#menu-refresh").hidden = true;
     $("#menu-refresh").addEventListener("click", () => {
-      setOpen(false);
+      closeMoreMenu();
       doFetch(state.meal, { force: true });
     });
     $("#menu-share").addEventListener("click", () => {
-      setOpen(false);
+      closeMoreMenu();
       shareSite();
     });
     $("#menu-hours").addEventListener("click", () => {
-      setOpen(false);
+      closeMoreMenu();
       openHoursModal();
     });
     $("#menu-about").addEventListener("click", () => {
       const shaEl = document.querySelector(".build-sha");
       const sha = shaEl ? shaEl.textContent.trim() : "";
       showToast("Eat@State · build " + (sha || "—"));
-      setOpen(false);
+      closeMoreMenu();
     });
     applyThemeMenu();
   }
@@ -345,8 +369,31 @@
 
   /* ---------- rendering ---------- */
 
+  function syncMealBtn() {
+    // Meal button shows the active meal + the date the data is for
+    // (compact "Lunch · Sep 16"). The full picker lives in the menu.
+    const label = $("#meal-btn-label");
+    if (!label) return;
+    const mealText = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
+    let datePart = "";
+    if (state.date) {
+      const d = new Date(state.date + "T12:00:00"); // local noon → date-safe
+      datePart = " · " + new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
+    }
+    label.textContent = mealText + datePart;
+    // Keep the in-menu tabs' active state + the brand date label in step.
+    ["breakfast", "lunch", "dinner"].forEach((x) => {
+      const b = $("#meal-" + x);
+      if (b) {
+        b.classList.toggle("active", x === state.meal);
+        b.setAttribute("aria-selected", String(x === state.meal));
+      }
+    });
+  }
+
   function renderChrome() {
     if (state.date) $("#date-label").textContent = state.date;
+    syncMealBtn();
     document.title = "Eat@State - Simplified";
   }
 
@@ -1057,13 +1104,9 @@
   function setMeal(m) {
     if (m === state.meal && state.data) return;
     gaEvent("select_meal", { meal: m });
-    ["breakfast", "lunch", "dinner"].forEach((x) => {
-      const b = $("#meal-" + x);
-      b.classList.toggle("active", x === m);
-      b.setAttribute("aria-selected", String(x === m));
-    });
     state.meal = m;
-    renderChrome();
+    renderChrome(); // updates the meal button label + in-menu tabs immediately
+    closeMoreMenu(); // picker chose a meal — collapse the menu
     // instant: show any cached snapshot for this meal
     const today = todayStr();
     const cached = loadCache(m, today);
