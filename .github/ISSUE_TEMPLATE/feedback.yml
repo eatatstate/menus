@@ -1,6 +1,5 @@
 name: Feedback / Bug report
 description: Report a problem or suggest an improvement for Eat@State - Simplified
-title: "[feedback] "
 labels: []
 body:
   - type: textarea
@@ -10,18 +9,20 @@ body:
       description: What did you see, and what did you expect instead?
     validations:
       required: true
-  - type: textarea
-    id: context
+  - type: checkboxes
+    id: platform
     attributes:
-      label: Context
-      description: Dining hall, meal, and the device/browser you were using (e.g. iPhone, Safari) — anything that helps reproduce it.
+      label: Platform
+      options:
+        - label: Mobile
+        - label: Desktop
     validations:
       required: false
   - type: input
-    id: build
+    id: browser
     attributes:
-      label: Build
-      description: The build SHA from the About dialog of the site (optional, but speeds up the fix).
-      placeholder: e.g. 27b275c
+      label: Browser / device
+      description: e.g. iPhone 15, Safari 18 — or Windows 11, Chrome 126
+      placeholder: e.g. iPhone · Safari
     validations:
       required: false

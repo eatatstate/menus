@@ -1002,7 +1002,6 @@
 
   /* ---------- about modal ---------- */
 
-  const REPO_URL = "https://github.com/eatatstate/menus-pwa";
   const FEEDBACK_URL = "https://github.com/eatatstate/menus/issues/new?template=feedback.yml";
 
   function openAboutModal() {
@@ -1011,19 +1010,14 @@
     const sha = meta ? meta.dataset.sha || "" : "";
     const time = meta ? meta.dataset.time || "" : "";
     const isPlaceholder = !sha || sha.indexOf("__") === 0 || sha === "dev";
-    const shaEl = $("#about-sha");
-    if (isPlaceholder) {
-      shaEl.textContent = "dev build";
-      shaEl.removeAttribute("href");
-    } else {
-      shaEl.textContent = sha;
-      shaEl.href = REPO_URL + "/commit/" + sha;
-    }
+    // SHA is display-only: the build repo is private, so no commit link.
+    $("#about-sha").textContent = isPlaceholder ? "dev build" : sha;
     $("#about-time").textContent = time && time.indexOf("__") !== 0 ? time : "—";
-    // Feedback always targets the template form; the build SHA is offered as
-    // a prefilled field so the reporter doesn't have to hunt for it.
-    $("#about-feedback").href = isPlaceholder ? FEEDBACK_URL : FEEDBACK_URL + "&body=" +
-      encodeURIComponent("\n---\nBuild: " + sha + "\n");
+    // Feedback opens the template form with the build SHA in the issue title.
+    // (A URL title param replaces the template's own title prefix, so the
+    // full "[feedback] <sha>" title is built here.)
+    $("#about-feedback").href = isPlaceholder ? FEEDBACK_URL : FEEDBACK_URL +
+      "&title=" + encodeURIComponent("[feedback] " + sha);
     const m = $("#about-modal");
     m.hidden = false;
     document.body.style.overflow = "hidden";
