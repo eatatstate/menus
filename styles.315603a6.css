@@ -124,7 +124,15 @@ button { font: inherit; cursor: pointer; }
   /* Single row: title + meal tabs + more (refresh lives in the menu).
      Placed after the base rules so it actually wins the cascade. */
   .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
-  .topbar-actions { width: auto; justify-content: flex-end; }
+  .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; }
+  /* Meal tabs must never wrap to a second row: if they don't fit (small
+     screens, larger iOS text sizes) they scroll horizontally. */
+  .meal-seg {
+    flex-wrap: nowrap; overflow-x: auto; min-width: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .meal-seg::-webkit-scrollbar { display: none; }
   .brand-mark { display: none; }
   .brand-sub { display: none; } /* date is redundant on phones — the footer shows "Updated …" */
   .brand h1 { font-size: .95rem; white-space: nowrap; }
