@@ -136,12 +136,16 @@ button { font: inherit; cursor: pointer; }
 @media (max-width: 480px) {
   /* Single row: title + meal button + more (meal picker lives in the menu).
      Placed after the base rules so it actually wins the cascade. */
-  .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; }
-  .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; }
+  .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; min-height: 42px; /* match the hall chip row's height */ }
+  /* Fill the row height: stretch the actions box to the topbar height, then
+     stretch its buttons to the box (no more tiny 20px buttons). */
+  .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; align-self: stretch; align-items: stretch; }
   .brand-mark { display: none; }
   .brand-sub { display: none; } /* date is redundant on phones — the footer shows "Updated …" */
   .brand h1 { font-size: .95rem; white-space: nowrap; }
-  .icon-btn { width: 36px; min-height: 0; font-size: 1rem; align-self: center; }
+  /* Keep the base align-self: stretch: topbar buttons and the search button
+     grow to their row's height (no more tiny centered 20px buttons). */
+  .icon-btn { width: 36px; min-height: 0; font-size: 1rem; }
   .icon-btn.meal-btn { width: auto; padding: 0 9px; } /* keep the meal button readable, not 36px */
 }
 @media (max-width: 360px) {
