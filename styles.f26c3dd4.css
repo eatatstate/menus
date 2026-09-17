@@ -89,7 +89,7 @@ button { font: inherit; cursor: pointer; }
 .topbar-inner {
   max-width: 860px; margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 16px;
   gap: 10px;
 }
 .topbar-actions { display: flex; align-items: center; gap: 8px; position: relative; /* anchors the dropdown */ }
@@ -121,22 +121,25 @@ button { font: inherit; cursor: pointer; }
   line-height: 1;
 }
 /* Meal button: shows the active meal + date; tapping opens the menu
-   (which holds the meal picker). Two classes → beats the .icon-btn
-   width override in the media block below. */
+   (which holds the meal picker). Fixed height so it reads as a padded
+   button; #more-btn matches it. */
 .icon-btn.meal-btn {
   width: auto;
-  padding: 0 10px;
+  height: 34px;
+  align-self: center; /* honor the fixed height instead of stretching to the row */
+  padding: 0 12px;
   font-size: .85rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+#more-btn { height: 34px; align-self: center; }
 .icon-btn.meal-btn .meal-date { color: var(--muted); font-weight: 500; }
 @media (max-width: 480px) {
   /* Single row: title + meal button + more (meal picker lives in the menu).
      Placed after the base rules so it actually wins the cascade. */
-  .topbar-inner { flex-wrap: nowrap; padding: 10px 12px; gap: 6px; min-height: 46px; /* +2px top/bottom vs hall row */ }
+  .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; min-height: 42px; /* match the hall chip row's height */ }
   /* Fill the row height: stretch the actions box to the topbar height, then
      stretch its buttons to the box (no more tiny 20px buttons). */
   .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; align-self: stretch; align-items: stretch; }
