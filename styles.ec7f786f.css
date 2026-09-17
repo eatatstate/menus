@@ -426,7 +426,7 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 
 .content {
   max-width: 860px; margin: 0 auto;
-  padding: 14px 16px calc(28px + var(--safe-bottom));
+  padding: 14px 16px calc(16px + var(--safe-bottom)); /* tighter gap to the footer */
 }
 .status {
   color: var(--muted); text-align: center; padding: 40px 0;
