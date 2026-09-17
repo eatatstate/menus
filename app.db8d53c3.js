@@ -306,7 +306,7 @@
         meal: meal,
         date: found.date,
         fetched_at: found.data.fetched_at,
-        halls: dedupe(found.data).halls,
+        halls: found.data.halls,
       };
       state.date = found.date;
       render();
@@ -339,16 +339,15 @@
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (seq !== reqSeq) return; // superseded by a newer request
-      const clean = dedupe(data);
-      state.data = clean;
-      state.date = clean.date;
-      saveCache(clean.meal, clean.date, clean);
+      state.data = data;
+      state.date = data.date;
+      saveCache(data.meal, data.date, data);
       render();
     } catch (err) {
       if (seq !== reqSeq) return;
       const cached = loadCache(meal, state.date || date || todayStr());
       if (cached) {
-        state.data = dedupe(cached);
+        state.data = cached;
         state.date = cached.date;
         showOffline(true);
         render();
@@ -651,25 +650,6 @@ function foodEmoji(name) {
       return null;
     }
     return hall;
-  }
-
-  // The upstream API occasionally lists the same dish twice in one station;
-  // the server dedupes on dump, this is the client-side safety net for stale
-  // published data / caches.
-  function dedupe(data) {
-    if (!data || !data.halls) return data;
-    for (const h of data.halls) {
-      for (const s of h.stations || []) {
-        const seen = new Set();
-        s.items = (s.items || []).filter((it) => {
-          const k = (it.name || "").toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-      }
-    }
-    return data;
   }
 
   // Flat {item, hall, station} entries for a single hall's stations.
@@ -1208,7 +1188,7 @@ function foodEmoji(name) {
     const today = todayStr();
     const cached = loadCache(m, today);
     if (cached) {
-      state.data = dedupe(cached);
+      state.data = cached;
       state.date = cached.date;
       render();
     } else {
@@ -1320,7 +1300,7 @@ function foodEmoji(name) {
   } else {
     const cached = STATIC ? null : loadCache("lunch", todayStr());
     if (cached) {
-      state.data = dedupe(cached);
+      state.data = cached;
       state.date = cached.date;
       render();
     } else {
