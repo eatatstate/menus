@@ -1,0 +1,27 @@
+name: Feedback / Bug report
+description: Report a problem or suggest an improvement for Eat@State - Simplified
+title: "[feedback] "
+labels: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Dining hall, meal, and the device/browser you were using (e.g. iPhone, Safari) — anything that helps reproduce it.
+    validations:
+      required: false
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The build SHA from the About dialog of the site (optional, but speeds up the fix).
+      placeholder: e.g. 27b275c
+    validations:
+      required: false

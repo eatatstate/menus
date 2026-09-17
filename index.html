@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.ec7f786f.css">
+<link rel="stylesheet" href="styles.cd932c3f.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -123,7 +123,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-sha">e803af7</span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="7941573" data-time="Sep 17, 2026 10:00 EDT"><a class="build-sha" href="https://github.com/eatatstate/menus-pwa/commit/7941573" target="_blank" rel="noopener">7941573</a></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -144,14 +144,38 @@
 <div id="hours-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="hours-title">
   <div class="modal-backdrop" data-hours-close></div>
   <div class="modal-card">
-    <button class="modal-close" data-hours-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button class="modal-close" data-hours-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     <h2 id="hours-title">Dining hours</h2>
     <div class="modal-meta" id="hours-meta"></div>
     <div id="hours-body" class="hours-body"></div>
   </div>
 </div>
 
-<script src="app.84820f6b.js"></script>
+<div id="about-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="about-title">
+  <div class="modal-backdrop" data-about-close></div>
+  <div class="modal-card about-card">
+    <button class="modal-close" data-about-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <div class="about-head">
+      <span class="brand-mark about-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></span>
+      <div>
+        <h2 id="about-title">Eat@State - Simplified</h2>
+        <div class="modal-meta about-tag">MSU campus dining menus, simplified</div>
+      </div>
+    </div>
+    <dl class="about-build">
+      <div><dt>Build</dt><dd><a class="build-sha" id="about-sha" href="#" target="_blank" rel="noopener">—</a></dd></div>
+      <div><dt>Built</dt><dd id="about-time">—</dd></div>
+      <div><dt>Source</dt><dd><a href="https://github.com/eatatstate/menus-pwa" target="_blank" rel="noopener">eatatstate/menus-pwa</a></dd></div>
+    </dl>
+    <a class="about-feedback" id="about-feedback" href="https://github.com/eatatstate/menus/issues/new?template=feedback.yml" target="_blank" rel="noopener">
+      <span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      Send feedback — open an issue
+    </a>
+    <p class="about-note">Spot something wrong with a menu? File an issue with the build SHA and we'll fix it.</p>
+  </div>
+</div>
+
+<script src="app.e3f60bf9.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>

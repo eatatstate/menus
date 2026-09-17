@@ -665,3 +665,29 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .hours-day-name { color: var(--dim); flex: 0 0 auto; max-width: 46%; }
 .hours-day-slots { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
 .hours-day.closed .hours-day-slots { color: var(--dim); font-style: italic; }
+
+/* About modal */
+.about-head { display: flex; align-items: center; gap: 12px; }
+.about-head .brand-mark { flex: 0 0 auto; } /* 42px tile (34px on phones) */
+#about-title { font-size: 1.25rem; }
+.about-tag { margin-bottom: 0; }
+.about-build { margin: 16px 0; border-top: 1px solid var(--line); }
+.about-build > div {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.about-build dt { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.about-build dd { margin: 0; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.about-build dd a { color: var(--accent); text-decoration: none; }
+.about-build dd a:hover { text-decoration: underline; }
+.about-feedback {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 11px 14px; border-radius: 10px;
+  background: var(--accent); color: #06231a;
+  font-size: .88rem; font-weight: 600; text-decoration: none;
+  transition: filter .15s ease, transform .05s ease;
+}
+.about-feedback:hover { filter: brightness(1.08); }
+.about-feedback:active { transform: translateY(1px); }
+.about-feedback svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.about-note { margin: 10px 0 0; font-size: .75rem; color: var(--dim); line-height: 1.5; }

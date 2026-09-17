@@ -167,10 +167,8 @@
       openHoursModal();
     });
     $("#menu-about").addEventListener("click", () => {
-      const shaEl = document.querySelector(".build-sha");
-      const sha = shaEl ? shaEl.textContent.trim() : "";
-      showToast("Eat@State · build " + (sha || "—"));
       closeMoreMenu();
+      openAboutModal();
     });
     applyThemeMenu();
   }
@@ -1001,6 +999,41 @@
   }
   $("#hours-modal").addEventListener("click", (e) => { if (e.target.closest("[data-hours-close]")) closeHoursModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHoursModal(); });
+
+  /* ---------- about modal ---------- */
+
+  const REPO_URL = "https://github.com/eatatstate/menus-pwa";
+  const FEEDBACK_URL = "https://github.com/eatatstate/menus/issues/new?template=feedback.yml";
+
+  function openAboutModal() {
+    gaEvent("view_about", {});
+    const meta = document.querySelector(".build-meta");
+    const sha = meta ? meta.dataset.sha || "" : "";
+    const time = meta ? meta.dataset.time || "" : "";
+    const isPlaceholder = !sha || sha.indexOf("__") === 0 || sha === "dev";
+    const shaEl = $("#about-sha");
+    if (isPlaceholder) {
+      shaEl.textContent = "dev build";
+      shaEl.removeAttribute("href");
+    } else {
+      shaEl.textContent = sha;
+      shaEl.href = REPO_URL + "/commit/" + sha;
+    }
+    $("#about-time").textContent = time && time.indexOf("__") !== 0 ? time : "—";
+    // Feedback always targets the template form; the build SHA is offered as
+    // a prefilled field so the reporter doesn't have to hunt for it.
+    $("#about-feedback").href = isPlaceholder ? FEEDBACK_URL : FEEDBACK_URL + "&body=" +
+      encodeURIComponent("\n---\nBuild: " + sha + "\n");
+    const m = $("#about-modal");
+    m.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function closeAboutModal() {
+    $("#about-modal").hidden = true;
+    document.body.style.overflow = "";
+  }
+  $("#about-modal").addEventListener("click", (e) => { if (e.target.closest("[data-about-close]")) closeAboutModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAboutModal(); });
 
   function hoursMetaLine(d) {
     const n = d.sections.reduce((a, s) => a + s.locations.length, 0);
