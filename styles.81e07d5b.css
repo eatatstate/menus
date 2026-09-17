@@ -671,6 +671,12 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .about-head .brand-mark { flex: 0 0 auto; } /* 42px tile (34px on phones) */
 #about-title { font-size: 1.25rem; }
 .about-tag { margin-bottom: 0; }
+.about-sparty {
+  display: block;
+  width: 72px; height: 72px;
+  margin: 14px auto 0;
+  border-radius: 16px;
+}
 .about-build { margin: 16px 0; border-top: 1px solid var(--line); }
 .about-build > div {
   display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
