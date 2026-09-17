@@ -38,7 +38,7 @@
   gtag('js', new Date());
   gtag('config', 'G-S19196P7H7');
 </script>
-<script>(function () { try { if (localStorage.getItem("eas-theme") === "light") document.documentElement.classList.add("light"); } catch (e) {} })();</script>
+<script>(function () { try { var t = localStorage.getItem("eas-theme"); if (t === "light" || (t !== "dark" && matchMedia("(prefers-color-scheme: light)").matches)) document.documentElement.classList.add("light"); } catch (e) {} })();</script>
 </head>
 <body>
 <a class="skip-link" href="#content">Skip to menus</a>
@@ -123,7 +123,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="8b50960" data-time="Sep 17, 2026 16:01 EDT"><span class="build-sha">8b50960</span></span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="eff4293" data-time="Sep 17, 2026 16:44 EDT"><span class="build-sha">eff4293</span></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -174,7 +174,7 @@
   </div>
 </div>
 
-<script src="app.7711f446.js"></script>
+<script src="app.ec268d50.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>
