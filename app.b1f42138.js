@@ -113,28 +113,25 @@
     }
   }
 
-  const moreBtn = $("#more-btn");
   const moreMenu = $("#more-menu");
   const mealBtn = $("#meal-btn");
-  // The overflow menu opens from either the ⋮ button or the meal button
-  // (which shows the active meal + date and holds the meal picker inside).
+  // The overflow menu opens from the meal button, which shows the active
+  // meal + date and holds the meal picker plus the secondary actions.
   function closeMoreMenu() {
     if (!moreMenu) return;
     moreMenu.classList.remove("open");
-    [moreBtn, mealBtn].forEach((b) => {
-      if (!b) return;
-      b.classList.remove("menu-open");
-      b.setAttribute("aria-expanded", "false");
-    });
+    if (mealBtn) {
+      mealBtn.classList.remove("menu-open");
+      mealBtn.setAttribute("aria-expanded", "false");
+    }
   }
   function openMoreMenu() {
     if (!moreMenu) return;
     moreMenu.classList.add("open");
-    [moreBtn, mealBtn].forEach((b) => {
-      if (!b) return;
-      b.classList.add("menu-open");
-      b.setAttribute("aria-expanded", "true");
-    });
+    if (mealBtn) {
+      mealBtn.classList.add("menu-open");
+      mealBtn.setAttribute("aria-expanded", "true");
+    }
   }
   function toggleMoreMenu() {
     moreMenu.classList.contains("open") ? closeMoreMenu() : openMoreMenu();
@@ -142,10 +139,6 @@
 
   function initMoreMenu() {
     // html.light already applied pre-paint by the head bootstrap.
-    moreBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleMoreMenu();
-    });
     mealBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleMoreMenu();
