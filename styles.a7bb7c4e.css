@@ -453,6 +453,7 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 }
 .hall-closed .big { font-size: 1.6rem; color: var(--muted); }
 .hall-closed .big svg { width: 2.2rem; height: 2.2rem; display: block; margin: 0 auto 8px; }
+.hall-closed .hint { margin-top: 8px; font-size: .82rem; color: var(--dim); }
 
 .station {
   background: var(--panel);

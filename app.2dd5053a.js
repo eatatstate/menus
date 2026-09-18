@@ -432,30 +432,38 @@
     const row = $("#hall-row");
     row.innerHTML = "";
     const halls = state.data.halls;
-    // Closed halls are hidden; keep the original data index for selection.
+    // Closed halls stay in the row (dimmed, labelled) — selecting one shows
+    // a clear "closed for <meal>" message in the content area instead of
+    // silently falling back to another hall.
     const open = halls.map((h, i) => ({ h, i })).filter((e) => !e.h.closed);
     if (open.length) {
       if (!userPickedHall) {
         // First render of this session: restore the persisted hall by name
         // (name, not index — the index shifts when halls are closed).
+        // A persisted hall that is closed for this meal is kept as the
+        // selection: its chip shows and the content says so.
         let saved = null;
         try { saved = localStorage.getItem(HALL_KEY); } catch (e) {}
+        const byNameIdx = halls.findIndex((h) => h.name === saved);
         const match = open.find((e) => e.h.name === saved);
-        state.hallIndex = (match || open[0]).i;
-      } else if (!open.some((e) => e.i === state.hallIndex)) {
-        state.hallIndex = open[0].i; // selected hall is closed
+        // A persisted hall that is closed for this meal is kept as the
+        // selection: its chip shows and the content says so.
+        state.hallIndex = byNameIdx !== -1 ? byNameIdx : (match || open[0]).i;
       }
+      // (No silent fallback when the selection is closed: the content area
+      // renders the closed message, and the user can tap another chip.)
     }
-    open.forEach(({ h, i }) => {
-      const b = el("button", "hall-chip" + (i === state.hallIndex ? " active" : ""));
+    halls.forEach((h, i) => {
+      const closed = !!h.closed;
+      const b = el("button", "hall-chip" + (i === state.hallIndex ? " active" : "") + (closed ? " closed" : ""));
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(i === state.hallIndex));
-      b.textContent = h.name;
+      b.textContent = h.name + (closed ? "  closed" : "");
       b.addEventListener("click", () => {
         userPickedHall = true;
         state.hallIndex = i;
-        try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {}
-        gaEvent("select_hall", { hall: h.name, meal: state.meal });
+        if (!closed) { try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {} }
+        gaEvent("select_hall", { hall: h.name, meal: state.meal, closed: closed });
         renderHallRow();
         renderContentOnly();
       });
@@ -641,7 +649,8 @@ function foodEmoji(name) {
       const big = el("div", "big");
       big.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"/><path d="M2 20h20"/><path d="M14 12v.01"/></svg>';
       d.appendChild(big);
-      d.appendChild(el("div", null, hall.name + " is closed for lunch on " + state.date));
+      d.appendChild(el("div", null, hall.name + " is closed for " + state.meal + " on " + state.date));
+      d.appendChild(el("div", "hint", "No menu is published for this meal yet — check back when " + state.meal + " opens, or tap another hall."));
       c.appendChild(d);
       return null;
     }
