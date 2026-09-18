@@ -27,7 +27,8 @@
     hallIndex: 0,
     view: "categories",   // "stations" | "categories" | "nutrition"
     cats: new Set(),     // empty = all; in categories view
-    showCarried: true,   // categories view: false hides "from breakfast" items
+    showCarried: false,  // categories view: "from breakfast" items hidden by default
+    compact: false,      // density: true = compact rows (no calories / carried tags)
     query: "",
     loading: false,
   };
@@ -48,8 +49,11 @@
   const HALL_KEY = "eas-hall";       // hall name (index shifts when halls close, so persist by name)
   const CAT_STATE_KEY = "eas-cats-collapsed"; // [category id, ...] — collapsed set (Categories view)
   const CARRIED_KEY = "eas-show-carried";     // "0"/"1" — carried items shown in Categories view
-  // Restore the "from breakfast" visibility switch (default: shown).
-  try { if (localStorage.getItem(CARRIED_KEY) === "0") state.showCarried = false; } catch (e) {}
+  const DENSITY_KEY = "eas-density";          // "comfortable" | "compact" — row density
+  // Restore the "from breakfast" visibility switch (default: hidden — carried
+  // items are self-serve leftovers and crowd the list) and row density.
+  try { state.showCarried = localStorage.getItem(CARRIED_KEY) === "1"; } catch (e) {}
+  try { state.compact = localStorage.getItem(DENSITY_KEY) === "compact"; } catch (e) {}
   function isLight() { return document.documentElement.classList.contains("light"); }
   // "system" (default) follows the OS; explicit "light"/"dark" wins.
   function themeSetting() {
@@ -72,7 +76,13 @@
     item.querySelector(".mi-ico").innerHTML = s === "system" ? ICON_SYS : (light ? ICON_M : ICON_S);
     item.querySelector(".mi-label").textContent = "Theme";
     item.querySelector(".mi-state").textContent = s === "system" ? "System" : (light ? "Light" : "Dark");
-    item.title = "Theme: " + (s === "system" ? "follow system" : light ? "light" : "dark") + " — tap to change";
+    item.title = "Theme: " + (s === "system" ? "follow system" : light ? "Light" : "Dark") + " — tap to change";
+  }
+  function applyDensityMenu() {
+    const item = $("#menu-density");
+    if (!item) return;
+    item.querySelector(".mi-state").textContent = state.compact ? "Compact" : "Comfortable";
+    item.title = "Row density: " + (state.compact ? "compact" : "comfortable") + " — tap to change";
   }
 
   let toastTimer = null;
@@ -163,6 +173,16 @@
       applyTheme();
       closeMoreMenu();
     });
+    // Row density toggle: Compact strips calories + carried tags and tightens
+    // row/section spacing (persisted; re-renders the current view in place).
+    $("#menu-density").addEventListener("click", () => {
+      state.compact = !state.compact;
+      try { localStorage.setItem(DENSITY_KEY, state.compact ? "compact" : "comfortable"); } catch (e) {}
+      document.documentElement.classList.toggle("compact", state.compact);
+      applyDensityMenu();
+      closeMoreMenu();
+      renderContentOnly();
+    });
     // Live-follow the OS while the setting is "system".
     if (lightMQ.addEventListener) {
       lightMQ.addEventListener("change", () => { if (themeSetting() === "system") applyTheme(); });
@@ -186,6 +206,11 @@
       openAboutModal();
     });
     applyTheme(); // align the menu label with the (pre-paint) applied theme
+    // A persisted compact preference is applied pre-paint by the head
+    // bootstrap (html.compact); sync state from that class so a stale
+    // localStorage value can't drift from the rendered UI.
+    state.compact = document.documentElement.classList.contains("compact");
+    applyDensityMenu();
   }
 
   /* ---------- data ---------- */
@@ -540,6 +565,13 @@
     return b;
   }
 
+  // Renders the trailing category badge on dish rows. Inside a category
+  // section the badge is redundant (the section says it), so the Categories
+  // view suppresses it — only Stations/search rows keep it.
+  function appendItemBadge(b, cat, withBadge) {
+    if (withBadge !== false && cat) b.appendChild(itemBadge(cat));
+  }
+
   /* ---------- food-kind emoji (from dish names; first match wins, none = no emoji) ---------- */
 
       const FOOD_KINDS = [
@@ -619,13 +651,16 @@ function foodEmoji(name) {
   }
 
   function makeItemButton(entry, opts) {
+    const o = opts || {};
     const b = el("button", "item" + (entry.item.cat === "entree" ? " entree" : "") + (entry.item.carried ? " carried" : ""));
     const fe = foodEmojiSpan(entry.item);
     if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
-    if (entry.item.carried && !(opts && opts.hideCarriedTag)) b.appendChild(el("span", "carried-tag", "from breakfast"));
-    if (entry.item.calories) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
-    b.appendChild(itemBadge(entry.item.cat));
+    // Carried tag: suppressed when the section groups carried items (redundant
+    // there) or in compact density mode.
+    if (entry.item.carried && !o.hideCarriedTag && !(state.compact && o.compactCapable)) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.calories && !(state.compact && o.compactCapable)) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
+    appendItemBadge(b, entry.item.cat, o.withBadge);
     b.addEventListener("click", () => openModal(entry));
     return b;
   }
@@ -712,6 +747,20 @@ function foodEmoji(name) {
     try { localStorage.setItem(CAT_STATE_KEY, JSON.stringify(Array.from(s))); }
     catch (e) {}
   }
+  // "Other" (the salad-bar long tail) is collapsed by default in Categories
+  // view; this remembers whether the user has expanded it.
+  const OTHER_EXPANDED_KEY = "eas-other-expanded"; // "1" when expanded
+  function otherExpanded() {
+    try { return localStorage.getItem(OTHER_EXPANDED_KEY) === "1"; } catch (e) { return false; }
+  }
+  function setOtherExpanded(expanded) {
+    try { localStorage.setItem(OTHER_EXPANDED_KEY, expanded ? "1" : "0"); } catch (e) {}
+  }
+  // Progressive disclosure in Categories view: long sections show the first
+  // CAT_PREVIEW items (protein-matched ones float to the top, so they make
+  // the cut) plus a "Show all" row. Expansion is per-session, not persisted.
+  const CAT_PREVIEW = 8;
+  const catExpanded = new Set();
   // "Also in breakfast" groups (Stations view): collapsed by default; this
   // stores which halls' groups the user has expanded.
   const BF_STATE_KEY = "eas-bfgroup-expanded"; // ["<hall>||__breakfast__", ...] — expanded set
@@ -829,16 +878,16 @@ function foodEmoji(name) {
     if (!shown) c.appendChild(el("div", "empty", searching ? "No dishes match your search." : "No dishes to show."));
   }
 
-  // Item button for a "list" section (cat-section/cat-list): name, protein
-  // icons, station/hall tag, category badge. Used by Categories and Nutrition.
-  function makeListItemButton(entry, searching) {
+  // Item button for a "list" section (cat-section/cat-list): name, carried
+  // tag, station/hall tag, category badge. Used by Categories and Nutrition.
+  function makeListItemButton(entry, searching, withBadge) {
     const b = el("button", "item" + (entry.item.carried ? " carried" : ""));
     const fe = foodEmojiSpan(entry.item);
     if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
-    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.carried && !state.compact) b.appendChild(el("span", "carried-tag", "from breakfast"));
     b.appendChild(el("span", "hall-tag", entryTag(entry, searching)));
-    b.appendChild(itemBadge(entry.item.cat));
+    appendItemBadge(b, entry.item.cat, withBadge);
     b.addEventListener("click", () => openModal(entry));
     return b;
   }
@@ -872,10 +921,13 @@ function foodEmoji(name) {
       // Items matching a protein type (beef, lamb, …) float to the top of each category.
       list.sort((a, b) =>
         (detectProteins(b.item.name).length ? 1 : 0) - (detectProteins(a.item.name).length ? 1 : 0));
-      const sec = el("section", "cat-section" + (collapsed.has(cat) ? " collapsed" : ""));
+      // "Other" (the salad-bar long tail) starts collapsed; every other
+      // category follows the persisted collapse state.
+      const isCollapsed = collapsed.has(cat) || (cat === "other" && !otherExpanded());
+      const sec = el("section", "cat-section" + (isCollapsed ? " collapsed" : ""));
       const head = el("button", "cat-head");
       head.type = "button";
-      head.setAttribute("aria-expanded", String(!collapsed.has(cat)));
+      head.setAttribute("aria-expanded", String(!isCollapsed));
       const label = el("span", "cat-head-label");
       label.textContent = CAT_EMOJI[cat] + " " + CAT_LABEL[cat] + "  (" + list.length + ")";
       head.appendChild(label);
@@ -884,13 +936,37 @@ function foodEmoji(name) {
       chev.setAttribute("aria-hidden", "true");
       head.appendChild(chev);
       sec.appendChild(head);
+      // Progressive disclosure: long sections show a preview plus a
+      // "Show all" row (expansion is per-session, not persisted).
+      const expanded = catExpanded.has(cat);
+      const visible = expanded ? list : list.slice(0, CAT_PREVIEW);
+      const previewed = !expanded && list.length > CAT_PREVIEW;
       const ul = el("ul", "cat-list");
-      for (const e of list) ul.appendChild(makeListItemButton(e, searching));
+      for (const e of visible) ul.appendChild(makeListItemButton(e, searching, false));
+      if (previewed) {
+        const more = el("button", "show-all");
+        more.type = "button";
+        more.textContent = "Show all " + list.length;
+        more.addEventListener("click", () => {
+          catExpanded.add(cat);
+          renderCategories();
+        });
+        ul.appendChild(more);
+      }
       sec.appendChild(ul);
       head.addEventListener("click", () => {
         const nowCollapsed = sec.classList.toggle("collapsed");
         head.setAttribute("aria-expanded", String(!nowCollapsed));
-        setCatCollapsed(cat, nowCollapsed);
+        if (cat === "other") {
+          // Other's state lives in OTHER_EXPANDED_KEY, not the persisted
+          // collapsed set — keep any legacy "other" entry out of that set.
+          setOtherExpanded(!nowCollapsed);
+          const s = catCollapsed();
+          if (s.has("other")) {
+            s.delete("other");
+            try { localStorage.setItem(CAT_STATE_KEY, JSON.stringify(Array.from(s))); } catch (e) {}
+          }
+        } else setCatCollapsed(cat, nowCollapsed);
       });
       c.appendChild(sec);
     }
