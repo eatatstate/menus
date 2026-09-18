@@ -880,12 +880,15 @@ function foodEmoji(name) {
 
   // Item button for a "list" section (cat-section/cat-list): name, carried
   // tag, station/hall tag, category badge. Used by Categories and Nutrition.
-  function makeListItemButton(entry, searching, withBadge) {
+  // calEntree (Categories view): calories inline on entrees only — the
+  // decision-relevant rows; suppressed in compact density.
+  function makeListItemButton(entry, searching, withBadge, calEntree) {
     const b = el("button", "item" + (entry.item.carried ? " carried" : ""));
     const fe = foodEmojiSpan(entry.item);
     if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
     if (entry.item.carried && !state.compact) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.calories && !state.compact && calEntree && entry.item.cat === "entree") b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     b.appendChild(el("span", "hall-tag", entryTag(entry, searching)));
     appendItemBadge(b, entry.item.cat, withBadge);
     b.addEventListener("click", () => openModal(entry));
@@ -942,7 +945,7 @@ function foodEmoji(name) {
       const visible = expanded ? list : list.slice(0, CAT_PREVIEW);
       const previewed = !expanded && list.length > CAT_PREVIEW;
       const ul = el("ul", "cat-list");
-      for (const e of visible) ul.appendChild(makeListItemButton(e, searching, false));
+      for (const e of visible) ul.appendChild(makeListItemButton(e, searching, false, true));
       if (previewed) {
         const more = el("button", "show-all");
         more.type = "button";
