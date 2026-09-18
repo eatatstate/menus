@@ -357,7 +357,7 @@
 
   function showError(msg) {
     state.data = null;
-    $("#hall-row").innerHTML = "";
+    $("#hall-track").innerHTML = "";
     $("#cat-row").hidden = true;
     $("#content").innerHTML = "";
     const d = el("div", "error");
@@ -422,7 +422,7 @@
 
   let userPickedHall = false; // set on chip click; persisted hall only applies before that
   function renderHallRow() {
-    const row = $("#hall-row");
+    const row = $("#hall-track");
     row.innerHTML = "";
     const halls = state.data.halls;
     // Closed halls stay in the row (dimmed, labelled) — selecting one shows
@@ -1253,8 +1253,8 @@ function foodEmoji(name) {
       e.preventDefault();
     }, { passive: false });
   }
-  const hallRow = $("#hall-row");
-  if (hallRow) wheelScrollRow(hallRow);
+  const hallTrack = $("#hall-track");
+  if (hallTrack) wheelScrollRow(hallTrack);
   const catRow = $("#cat-row");
   if (catRow) wheelScrollRow(catRow);
 
