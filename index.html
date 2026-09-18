@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.a7bb7c4e.css">
+<link rel="stylesheet" href="styles.375e9e02.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -52,15 +52,13 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button id="meal-btn" class="icon-btn meal-btn" title="Change meal" aria-label="Choose meal" aria-haspopup="true" aria-expanded="false"><span id="meal-btn-label">Lunch</span></button>
+      <div class="seg meal-seg" role="tablist" aria-label="Meal">
+        <button id="meal-breakfast" class="seg-btn" role="tab">Breakfast</button>
+        <button id="meal-lunch" class="seg-btn active" role="tab">Lunch</button>
+        <button id="meal-dinner" class="seg-btn" role="tab">Dinner</button>
+      </div>
       <button id="more-btn" class="icon-btn" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="12" cy="5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="19" r="1.4" fill="currentColor"/></svg></button>
       <div id="more-menu" class="more-menu" role="menu" aria-label="Actions">
-        <div class="seg meal-seg" role="tablist" aria-label="Meal">
-          <button id="meal-breakfast" class="seg-btn" role="tab">Breakfast</button>
-          <button id="meal-lunch" class="seg-btn active" role="tab">Lunch</button>
-          <button id="meal-dinner" class="seg-btn" role="tab">Dinner</button>
-        </div>
-        <div class="menu-sep"></div>
         <button class="menu-item" id="menu-theme" role="menuitem">
           <span class="mi-ico" aria-hidden="true"></span>
           <span class="mi-label">Light theme</span>
@@ -123,7 +121,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="bf3afd5" data-time="Sep 18, 2026 08:27 EDT"><span class="build-sha">bf3afd5</span></span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="6d67d81" data-time="Sep 18, 2026 09:03 EDT"><span class="build-sha">6d67d81</span></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -174,7 +172,7 @@
   </div>
 </div>
 
-<script src="app.2dd5053a.js"></script>
+<script src="app.7a7276dc.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>

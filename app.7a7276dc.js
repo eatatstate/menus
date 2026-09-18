@@ -115,26 +115,23 @@
 
   const moreBtn = $("#more-btn");
   const moreMenu = $("#more-menu");
-  const mealBtn = $("#meal-btn");
-  // The overflow menu opens from either the ⋮ button or the meal button
-  // (which shows the active meal + date and holds the meal picker inside).
+  // The overflow menu opens from the ⋮ button. Meal switching is inline in
+  // the top bar (Breakfast/Lunch/Dinner tabs) — no dropdown for meals.
   function closeMoreMenu() {
     if (!moreMenu) return;
     moreMenu.classList.remove("open");
-    [moreBtn, mealBtn].forEach((b) => {
-      if (!b) return;
-      b.classList.remove("menu-open");
-      b.setAttribute("aria-expanded", "false");
-    });
+    if (moreBtn) {
+      moreBtn.classList.remove("menu-open");
+      moreBtn.setAttribute("aria-expanded", "false");
+    }
   }
   function openMoreMenu() {
     if (!moreMenu) return;
     moreMenu.classList.add("open");
-    [moreBtn, mealBtn].forEach((b) => {
-      if (!b) return;
-      b.classList.add("menu-open");
-      b.setAttribute("aria-expanded", "true");
-    });
+    if (moreBtn) {
+      moreBtn.classList.add("menu-open");
+      moreBtn.setAttribute("aria-expanded", "true");
+    }
   }
   function toggleMoreMenu() {
     moreMenu.classList.contains("open") ? closeMoreMenu() : openMoreMenu();
@@ -143,10 +140,6 @@
   function initMoreMenu() {
     // html.light already applied pre-paint by the head bootstrap.
     moreBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleMoreMenu();
-    });
-    mealBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleMoreMenu();
     });
@@ -389,18 +382,9 @@
   /* ---------- rendering ---------- */
 
   function syncMealBtn() {
-    // Meal button shows the active meal + the date the data is for
-    // (compact "Lunch · Sep 16"). The full picker lives in the menu.
-    const label = $("#meal-btn-label");
-    if (!label) return;
-    const mealText = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
-    let datePart = "";
-    if (state.date) {
-      const d = new Date(state.date + "T12:00:00"); // local noon → date-safe
-      datePart = " · " + new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
-    }
-    label.textContent = mealText + datePart;
-    // Keep the in-menu tabs' active state + the brand date label in step.
+    // Keep the inline meal tabs' active state in step with state.meal
+    // (the tabs live in the top bar; the date shows in the brand sub-label
+    // on wide screens and the footer's "Updated …" line on phones).
     ["breakfast", "lunch", "dinner"].forEach((x) => {
       const b = $("#meal-" + x);
       if (b) {

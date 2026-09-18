@@ -120,42 +120,26 @@ button { font: inherit; cursor: pointer; }
   font-size: 1.15rem;
   line-height: 1;
 }
-/* Meal button: shows the active meal + date; tapping opens the menu
-   (which holds the meal picker). Fixed height so it reads as a padded
-   button; #more-btn matches it. */
-.icon-btn.meal-btn {
-  width: auto;
-  height: 34px;
-  align-self: center; /* honor the fixed height instead of stretching to the row */
-  padding: 0 12px;
-  font-size: .85rem;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 #more-btn { height: 34px; align-self: center; }
-.icon-btn.meal-btn .meal-date { color: var(--muted); font-weight: 500; }
 @media (max-width: 480px) {
-  /* Single row: title + meal button + more (meal picker lives in the menu).
-     Placed after the base rules so it actually wins the cascade. */
+  /* Single row: title + inline meal tabs + more. */
   .topbar-inner { flex-wrap: nowrap; padding: 8px 12px; gap: 6px; min-height: 42px; /* match the hall chip row's height */ }
   /* Fill the row height: stretch the actions box to the topbar height, then
      stretch its buttons to the box (no more tiny 20px buttons). */
-  .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; align-self: stretch; align-items: stretch; }
+  .topbar-actions { width: auto; min-width: 0; justify-content: flex-end; align-self: stretch; align-items: center; }
+  .topbar-actions .meal-seg { flex: 0 1 auto; }
   .brand-mark {
     display: grid; /* shown at every size */
     /* Compact the tile on small phones so the header stays one tight row. */
     width: 34px; height: 34px; border-radius: 10px; font-size: 1rem;
   }
   .brand-mark svg { width: 18px; height: 18px; }
-  .brand-sub { display: none; } /* date is redundant on phones — the meal button carries it */
+  .brand-sub { display: none; } /* date is redundant on phones — the footer's "Updated …" line carries it */
   .brand-full { display: none; } /* wide screens show "Eat@State - Simplified" */
   .brand h1 { font-size: .95rem; white-space: nowrap; }
   /* Keep the base align-self: stretch: topbar buttons and the search button
      grow to their row's height (no more tiny centered 20px buttons). */
   .icon-btn { width: 36px; min-height: 0; font-size: 1rem; }
-  .icon-btn.meal-btn { width: auto; padding: 0 9px; } /* keep the meal button readable, not 36px */
 }
 @media (max-width: 360px) {
   /* Extra-small (SE/5): icon-only brand so the meal tabs always fit one row. */
