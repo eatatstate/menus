@@ -121,12 +121,11 @@ button { font: inherit; cursor: pointer; }
   line-height: 1;
 }
 /* Meal button: shows the active meal + date; tapping opens the overflow
-   menu (meal picker + secondary actions). Fixed height so it reads as a
-   padded button. */
+   menu (meal picker + secondary actions). Like the other topbar buttons it
+   stretches to the row's height, so the header row reads as one uniform
+   band instead of a 34px button floating in a 42px row. */
 .icon-btn.meal-btn {
   width: auto;
-  height: 34px;
-  align-self: center; /* honor the fixed height instead of stretching to the row */
   padding: 0 12px;
   font-size: .85rem;
   font-weight: 600;
@@ -237,6 +236,7 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   padding-bottom: 2px;
 }
 .hall-row {
+  position: relative;
   max-width: 860px; margin: 0 auto;
   padding: 12px 16px 4px; /* same side margins as the other rows */
 }
@@ -250,6 +250,20 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   scrollbar-width: none;
 }
 .hall-track::-webkit-scrollbar { display: none; }
+/* Edge fades: the scrollbar is hidden, so a soft gradient at each edge
+   signals that more halls are off-screen. Shown only when the track can
+   actually scroll that direction (JS toggles .at-start / .at-end on the
+   row: on scroll, resize, and after every render). */
+.hall-fade {
+  position: absolute; top: 0; bottom: 0; width: 44px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.hall-fade.left  { left: 0;  background: linear-gradient(to right,  var(--bg), transparent); }
+.hall-fade.right { right: 0; background: linear-gradient(to left,   var(--bg), transparent); }
+.hall-row:not(.at-start) .hall-fade.left  { opacity: 1; }
+.hall-row:not(.at-end)   .hall-fade.right { opacity: 1; }
 .hall-chip {
   flex: 0 0 auto;
   padding: 8px 14px;
@@ -279,27 +293,101 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 }
 .controls .seg { flex: 0 1 auto; }
 #search-toggle { margin-left: auto; flex: 0 0 auto; order: 2; }
-.cat-row-wrap { flex-basis: 100%; order: 3; position: relative; min-width: 0; /* let the inner cat-row scroll instead of inflating the row */ }
-/* Right-edge fade on the category row: shown while more chips are hidden
-   to the right, removed at the end of the row (JS toggles .fade). */
-.cat-row-wrap::after {
-  content: "";
-  position: absolute; top: 0; right: 0; bottom: 0; width: 20px;
-  background: linear-gradient(to right, transparent, var(--bg));
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .2s ease;
+/* Filters FAB — floating bottom-right button opening the filters sheet.
+   Bottom-right: the strong-hand corner (Tony's choice, 2026-09-19).
+   Fades out when the footer scrolls into view (JS .away) so it never
+   overlaps the footer links. */
+#filters-fab-wrap {
+  position: fixed; right: 16px;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 50;
+  display: flex; align-items: center; gap: 10px;
+  transition: opacity .18s ease, transform .18s ease;
 }
-.cat-row-wrap.fade::after { opacity: 1; }
+#filters-fab-wrap.away { opacity: 0; transform: translateY(10px); pointer-events: none; }
+#filters-hint {
+  font-size: .8rem; font-weight: 600;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 11px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.28);
+  display: none;
+  animation: fadein .25s ease;
+}
+#filters-fab-wrap.hint #filters-hint { display: inline-block; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+#filters-fab {
+  position: relative;
+  width: 56px; height: 56px; border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #06231a;
+  display: grid; place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  transition: transform .05s ease, background .15s ease, opacity .15s ease;
+}
+#filters-fab:active { transform: translateY(1px); }
+#filters-fab.disabled { opacity: .35; cursor: default; }
+/* Light theme: the accent flips to a dark green, so the hard-coded dark
+   icon (#06231a) vanishes against it — use white (Tony, 2026-09-19).
+   Dark mode keeps #06231a on the light-green accent. */
+html.light #filters-fab { color: #fff; }
+#filters-fab .fab-ico, #filters-fab .fab-x { grid-area: 1 / 1; display: grid; place-items: center; transition: opacity .12s ease; }
+#filters-fab svg { width: 24px; height: 24px; display: block; }
+#filters-fab .fab-x { opacity: 0; }
+#filters-fab.open .fab-ico { opacity: 0; }
+#filters-fab.open .fab-x { opacity: 1; }
+#filters-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent2);
+  color: #241a02;
+  font-size: .72rem; font-weight: 700;
+  display: grid; place-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+/* Light theme: --accent2 is a dark amber there, so dark badge text would
+   vanish — white, same reasoning as the FAB icon. */
+html.light #filters-badge { color: #fff; }
+@media (max-width: 400px) {
+  #filters-fab-wrap { right: 12px; bottom: calc(12px + var(--safe-bottom)); }
+  #filters-fab { width: 52px; height: 52px; }
+}
+/* Filters sheet sections. Chips reuse the existing .cat-chip/.diet-chip
+   language; here they wrap freely (the sheet is full width). */
+.filters-label {
+  margin: 18px 0 8px;
+  font-size: .75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .8px;
+  color: var(--muted);
+}
+.filters-label:first-child { margin-top: 2px; }
+.filters-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters-chips .cat-chip, .filters-chips .diet-chip { flex: 0 0 auto; }
+.switch-row { display: inline-flex; margin-top: 2px; }
+.switch-row:first-child { margin-top: 4px; }  /* leading element under the scope line */
+.filters-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 22px;
+}
+.filters-reset {
+  border: 1px solid var(--line); background: var(--chip);
+  color: var(--muted); font-size: .85rem; font-weight: 500;
+  border-radius: 10px; padding: 9px 14px;
+}
+.filters-reset:hover { color: var(--text); }
 /* Search row lives inside .controls: on desktop it takes the space between
    the view-mode segment and the search button (input left of the button);
-   on mobile it wraps to a full-width row below the button. The category
-   chips row (order 3) always lands last. */
+   on mobile it wraps to a full-width row below the button. */
 .search-row { flex: 1 1 160px; min-width: 0; order: 1; }
 @media (max-width: 640px) {
   #search-toggle { order: 1; }
   .search-row { flex: 1 1 100%; order: 2; }
-  /* Compact sticky stack: tighter padding/gaps (cat-row below the base rules). */
+  /* Compact sticky stack: tighter padding/gaps. */
   .hall-row { padding: 8px 12px 2px; }
   .hall-chip { padding: 6px 12px; }
   .controls { padding: 2px 12px 0; gap: 6px; }
@@ -334,9 +422,6 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 @media (max-width: 400px) {
   .seg-btn { padding: 6px 8px; font-size: .78rem; }
 }
-.cat-row {
-  display: flex; gap: 6px; flex-wrap: wrap;
-}
 .cat-chip {
   padding: 6px 12px;
   border-radius: 10px;
@@ -356,21 +441,30 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent2) 12%, var(--chip));
 }
-@media (max-width: 640px) {
-  /* One scrollable chip row instead of three wrapped rows — the big win in
-     the sticky-stack height (placed after the base rules so it wins). */
-  .cat-row {
-    flex-wrap: nowrap; overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 6px; /* room below the chips for the edge fade */
-  }
-  .cat-row::-webkit-scrollbar { display: none; }
-  .cat-chip { flex: 0 0 auto; padding: 5px 10px; }
-  .switch { flex: 0 0 auto; padding: 5px 10px 5px 8px; }
+/* Dietary filter chips — inside the filters sheet (all views). Same chip
+   language as the category chips; the active state uses the primary accent
+   (green) to read as a "mode" rather than a category selection (amber). */
+.diet-chip {
+  padding: 5px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 500;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .05s ease;
 }
-/* "From breakfast" visibility switch — inline with the category chips.
-   ON (default) shows carried items; OFF hides them from this view. */
+.diet-chip:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--text); }
+.diet-chip:active { transform: translateY(1px); }
+.diet-chip .n { opacity: .6; font-size: .72rem; margin-left: 4px; }
+.diet-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--chip));
+  font-weight: 600;
+}
+/* "From breakfast" visibility switch — in the filters sheet (Categories
+   view). ON shows carried items; OFF hides them from this view. */
 .switch {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 6px 11px 6px 8px;
@@ -432,6 +526,13 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   max-width: 860px; margin: 0 auto;
   padding: 14px 16px calc(16px + var(--safe-bottom)); /* tighter gap to the footer */
 }
+/* FAB clearance: the floating filters button (52-56px, bottom-right)
+   overlaps the last list rows while the footer is off-screen (.away only
+   triggers once the footer arrives). Extra bottom padding keeps the final
+   rows tappable and unoccluded; the footer adds its own padding below. */
+@media (max-width: 767px) {
+  .content { padding-bottom: calc(76px + var(--safe-bottom)); }
+}
 .status {
   color: var(--muted); text-align: center; padding: 40px 0;
   display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -467,34 +568,18 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   margin-bottom: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
 }
-html.light .station { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
-.station-head {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  width: 100%;
-  /* it's a <button> — reset the UA defaults */
-  border: none; background: none; padding: 2px 0; margin-bottom: 6px;
-  font: inherit; color: inherit; text-align: left; cursor: pointer;
-  -webkit-appearance: none; appearance: none; border-radius: 8px;
-}
-.station-head:hover .station-name { color: var(--text); }
-.station-head .chev {
-  margin-left: auto; flex: 0 0 auto;
-  width: 1rem; height: 1rem; display: inline-flex; color: var(--dim);
-  transition: transform .18s ease;
-}
+html.light .station { box-shadow: 0 1px 2px rgba(28, 38, 32, .10), 0 1px 3px rgba(28, 38, 32, .06); }
+/* Station headers reuse the shared cat-head/cat-head-label classes; the name +
+   group pair can wrap on narrow widths, so allow wrapping here (cat-head
+   defaults to no-wrap, which is fine for the single-label Categories/Nutrition). */
+.station .cat-head { flex-wrap: wrap; }
 .station.collapsed .chev { transform: rotate(-90deg); }
 .station.collapsed .items { display: none; }
-.station.collapsed .station-head { margin-bottom: 2px; }
-.station-name {
-  font-family: var(--font-display);
-  font-size: .82rem; font-weight: 700; letter-spacing: .8px;
-  color: var(--accent2);
-  text-transform: uppercase;
-}
+.station.collapsed .show-all { display: none; } /* "Show all" is a sibling of .items */
+.station.collapsed .cat-head { margin-bottom: 2px; }
+/* Station headers share the cat-head/cat-head-label classes with Categories
+   and Nutrition (same font, accent color, left border, chevron). */
 .station-group { font-size: .75rem; color: var(--dim); font-style: italic; }
-/* "Also in breakfast" group: the carried items live here (Stations view); the
-   header is deliberately quieter than regular station headers. */
-.carried-group .station-name { color: var(--dim); }
 .items {
   list-style: none; margin: 0; padding: 0;
   columns: 2; column-gap: 26px;
@@ -514,12 +599,7 @@ html.light .station { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 }
 .item:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
 .item:last-child { border-bottom: none; }
-.item.entree {
-  font-weight: 600;
-  padding-left: 10px;
-  margin-left: -10px;
-  border-left: 3px solid var(--entree);
-}
+.item.entree { font-weight: 600; }
 .item .cal { color: var(--dim); font-size: .74rem; margin-left: 6px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .protein-icons { margin-left: 6px; white-space: nowrap; }
 .protein { font-size: .9em; margin-right: 2px; cursor: help; }
@@ -554,8 +634,16 @@ html.light .station { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 html.light .carried-tag { border-color: #c9d4cf; background: #eef3f0; }
 
 .cat-section {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+  /* Section card: the header lives INSIDE the card, like a .station —
+     shared background/border/radius, so header and list read as one unit. */
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
 }
+html.light .cat-section { box-shadow: 0 1px 2px rgba(28, 38, 32, .10), 0 1px 3px rgba(28, 38, 32, .06); }
 .cat-section > h2 {
   font-family: var(--font-display);
   font-size: .8rem; letter-spacing: .8px; text-transform: uppercase;
@@ -583,16 +671,15 @@ html.light .carried-tag { border-color: #c9d4cf; background: #eef3f0; }
 .cat-section.collapsed .cat-head { margin-bottom: 0; }
 .cat-list {
   list-style: none; margin: 0; padding: 0;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 4px 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
 }
-html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .cat-list .item { font-weight: 400; }
 .cat-list .item .hall-tag {
   color: var(--dim); font-size: .72rem; margin-left: 6px;
+  /* Search rows carry "hall · station" — keep it one line and truncate
+     instead of wrapping, so the category badge after it stays aligned
+     and row heights uniform. */
+  display: inline-block; max-width: 46%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; vertical-align: baseline;
 }
 .empty { color: var(--muted); text-align: center; padding: 34px 0; }
 
@@ -667,8 +754,14 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 .hours-days { display: flex; flex-direction: column; gap: 3px; }
 .hours-valid { font-size: .72rem; color: var(--accent2); margin: 2px 0 1px; }
 .hours-day { display: flex; justify-content: space-between; gap: 12px; font-size: .82rem; }
-.hours-day-name { color: var(--dim); flex: 0 0 auto; max-width: 46%; }
-.hours-day-slots { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+/* The day name yields width first (shrinks, wraps) and the time slots get
+   priority: they're the data, take the remaining column, and wrap within it
+   (right-aligned, tabular). This keeps the 2-column look and avoids the
+   orphaned-2nd-line imbalance when a long name + long slot list collide. */
+.hours-day-name { color: var(--dim); flex: 0 1 auto; min-width: 0; max-width: 52%; }
+.hours-day-slots { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; flex: 1 1 auto; min-width: 0; }
+/* One slot = one unbreakable unit (breaks only at the comma between slots). */
+.hours-slot { white-space: nowrap; }
 .hours-day.closed .hours-day-slots { color: var(--dim); font-style: italic; }
 
 /* About modal */
@@ -716,3 +809,39 @@ html.light .cat-list { box-shadow: 0 1px 2px rgba(28, 38, 32, .06); }
 }
 .show-all:hover { color: var(--text); }
 .show-all:active { transform: translateY(1px); }
+
+/* ---------- touch targets (coarse pointers only) ----------
+   Visual sizes stay as designed; on touch devices the *hit area* grows via
+   a pseudo-element (clicks on it land on the element). Inset directions are
+   asymmetric on purpose: extensions only reach into FREE space (row gaps,
+   card padding, sheet padding) — never into an adjacent row, because
+   adjacent rows split the band by DOM order and a zero-sum overlap gives
+   nothing. Row-adjacent targets (list items, menu items) therefore only
+   gain horizontally and stay ~33-36px tall (taller rows are a visual
+   density choice, not a hit-area fix). Desktop mouse users keep the
+   compact footprint. The hall track gets 6px of vertical padding (offset
+   by a negative margin) so the chip hit areas stay inside its scrollable
+   box and no second scrollbar appears. */
+@media (pointer: coarse) {
+  .hall-chip, .seg-btn, .icon-btn, .menu-item,
+  .cat-chip, .diet-chip, .switch, .show-all, .item,
+  .cat-head, .filters-reset { position: relative; }
+  /* .modal-close and .search-clear are already position:absolute —
+     their ::after insets extend their hit areas without re-positioning. */
+  .hall-track { padding: 6px 0; margin: -6px 0; }
+  .hall-chip::after { content: ""; position: absolute; inset: -7px; }           /* 32 → 44 (7px compensates 1px border) */
+  .seg-btn::after { content: ""; position: absolute; inset: 0 -8px -15px; }     /* 29 → 44 (down into .content padding) */
+  .icon-btn::after { content: ""; position: absolute; inset: -4px; }            /* 36 → 44 */
+  .icon-btn.meal-btn::after { content: ""; position: absolute; inset: -5px; }   /* 34 → 44 */
+  .menu-item::after { content: ""; position: absolute; inset: 0 -4px; }         /* 36 → 36 (rows are adjacent: horizontal only) */
+  .item::after { content: ""; position: absolute; inset: 0 -4px 1px; }          /* 32 → ~33 (takes the divider; rows adjacent) */
+  .show-all::after { content: ""; position: absolute; inset: 0 -4px -13px; }    /* 31 → 44 (down into card margin) */
+  .cat-chip::after { content: ""; position: absolute; inset: 0 -6px; }          /* ~25 → ~31 */
+  .diet-chip::after { content: ""; position: absolute; inset: 0 -6px; }         /* ~24 → ~30 */
+  .switch::after { content: ""; position: absolute; inset: 0 -6px; }            /* ~33 → ~39 */
+  .cat-head { padding: 8px 4px 6px 10px; }                                      /* 21 → 29 (bigger header on touch) */
+  .cat-head::after { content: ""; position: absolute; inset: -10px -12px 0; }   /* → 39 (up into card padding; list rows untouched) */
+  .filters-reset::after { content: ""; position: absolute; inset: -4px; }       /* ~40 → 48 */
+  .modal-close::after { content: ""; position: absolute; inset: -8px; }         /* 32 → 48 */
+  .search-clear::after { content: ""; position: absolute; inset: -10px; }       /* 24 → 44 */
+}

@@ -13,6 +13,65 @@
   };
   const STORE_KEY = "eas-lunch-cache";
 
+  /* ---------- dietary tags (rule-based, from ingredient lists) ----------
+     Conservative by design: an item is tagged only when the evidence is
+     unambiguous. A false "vegan"/"gluten-free" is worse than no tag, so
+     anything needing judgment (cross-contact, "may contain", hidden gluten in
+     flavorings) is treated as not-dietary. vegan ⊂ vegetarian — one check
+     covers both. */
+
+  const MEAT_RE = /\b(beef|veal|steak|hamburg|chicken|turkey|drumstick|wing|thigh|bacon|pancetta|prosciutto|salami|pepperoni|ham\b|pork|sausage|chorizo|andouille|frankfurter|hot dog|lamb|game meat|venison|bison|brisket|ribs?|meat|meatballs?|meatloaf|jerky|duck\b|goose\b|lard|anchov|sardines?|salmon|tuna|cod|tilapia|trout|mackerel|pollock|whitefish|fish|fish sauce|clams?|shrimp|prawn|crab|lobster|scallop|calamari|oyster|caviar)\b/i;
+  // Plant-based milks/creams contain the dairy words ("almond milk") — strip
+  // them before testing, or vegan/dairy-free items made with them would be
+  // excluded. Animal milks (cow/goat/buffalo) are NOT in this list: they are
+  // real dairy.
+  const PLANT_DAIRY_RE = /\b(?:almond|soy|coconut|oat|rice|cashew|peanut|hemp|macadamia) (?:milk|cream|butter|yogurt)\b/gi;
+  // "Cream of tartar" (a baking acid) and "cream of coconut" are not dairy.
+  const CREAM_NONDAIRY_RE = /\bcream of (?:tartar|coconut)\b/gi;
+  const DAIRY_RE = /\b(milk|lactose|whey|casein|butter|ghee|cheese|queso|cream|sour cream|half and half|buttermilk|yogurt|yoghurt|parmesan|mozzarella|cheddar|feta|ricotta|crème|quark|curd)\b/i;
+  // Real gluten sources. \b keeps "buckwheat" out (it is gluten-free). Malt is
+  // flagged except its sugar derivatives (maltodextrin/maltitol/maltose).
+  const GLUTEN_RE = /\b(wheat|barley|rye|spelt|triticale|farro|durum|semolina|couscous|bulgur|seitan|kamut|einkorn|emmer|malt(?!odextrin|itol|ose))\b/i;
+  // Oats carry a cross-contamination risk, so they are treated as gluten
+  // unless the item explicitly declares itself gluten-free (certified GF oats).
+  const OATS_RE = /\b(oats?|oat ?meal|oat ?flour|oat ?bran)\b/i;
+  const GF_EXEMPT_RE = /\bgluten[- ]?free\b/i;
+  const EGG_RE = /\b(eggs?|egg white|egg yolk|albumin|mayo|mayonnaise|meringue|aioli|eclair)\b/i;
+  const HONEY_RE = /\b(honey)\b/i;
+  const GELATIN_RE = /\b(gelatin|gelatine|isinglass)\b/i; // animal-derived, vegan-only concern
+  // Whole-word "nut" is safe: \b keeps butternut/nutmeg/nutty out.
+  const NUT_RE = /\b(peanut|groundnut|almond|cashew|walnut|hazelnut|pistachio|pecan|macadamia|pine nut|tree nut|nut)\b/i;
+  const DIETS = [
+    { id: "vegetarian", label: "Vegetarian", test: (t) => !MEAT_RE.test(t) },
+    { id: "vegan",      label: "Vegan",      test: (t) => {
+      const p = t.replace(PLANT_DAIRY_RE, " ");
+      return !MEAT_RE.test(p) && !DAIRY_RE.test(p) && !EGG_RE.test(p) && !HONEY_RE.test(p) && !GELATIN_RE.test(p);
+    } },
+    { id: "nutfree",    label: "Nut-free",   test: (t) => !NUT_RE.test(t) },
+    { id: "glutenfree", label: "Gluten-free", test: (t) =>
+      !GLUTEN_RE.test(t) && (!OATS_RE.test(t) || GF_EXEMPT_RE.test(t)) },
+    { id: "dairyfree",  label: "Dairy-free", test: (t) => {
+      const p = t.replace(PLANT_DAIRY_RE, " ").replace(CREAM_NONDAIRY_RE, " ");
+      return !DAIRY_RE.test(p);
+    } },
+  ];
+  // Returns the diet ids an item satisfies, or null when the item has no
+  // ingredient list to judge (then it matches no filter, ever). Prefers the
+  // server-computed `item.diet` field (Go DietTags, same rules); falls back
+  // to local computation for pre-tag snapshots / old cached data.
+  function dietTags(item) {
+    if (Array.isArray(item.diet) && item.diet.length) return item.diet;
+    const t = (item.ingredients || "").toLowerCase();
+    if (!t) return null;
+    return DIETS.filter((d) => d.test(t)).map((d) => d.id);
+  }
+  // A diet filter matches an entry when the item carries that tag. Null tags
+  // (no ingredient data) never match — conservative.
+  function dietMatches(entry, dietId) {
+    const tags = dietTags(entry.item);
+    return tags ? tags.includes(dietId) : false;
+  }
+
   // Static (GitHub Pages) mode: no backend, load the latest snapshot from
   // the data/ directory (published from the data branch).
   // Also enabled with ?static=1 for testing against a local server.
@@ -26,8 +85,11 @@
     date: null,
     hallIndex: 0,
     view: "categories",   // "stations" | "categories" | "nutrition"
-    cats: new Set(),     // empty = all; in categories view
-    showCarried: false,  // categories view: "from breakfast" items hidden by default
+    cats: new Set(),     // empty = all; categories view only
+    stations: new Set(), // empty = all; stations view only (per-session)
+    proteins: new Set(), // empty = all; nutrition view only (per-session)
+    dietFilters: new Set(), // dietary filters (all views), persisted
+    showCarried: false,  // "breakfast menu also served" items hidden by default (all views)
     query: "",
     loading: false,
   };
@@ -47,10 +109,18 @@
   const VIEW_KEY = "eas-view";       // "stations" | "categories" | "nutrition"
   const HALL_KEY = "eas-hall";       // hall name (index shifts when halls close, so persist by name)
   const CAT_STATE_KEY = "eas-cats-collapsed"; // [category id, ...] — collapsed set (Categories view)
-  const CARRIED_KEY = "eas-show-carried";     // "0"/"1" — carried items shown in Categories view
-  // Restore the "from breakfast" visibility switch (default: hidden — carried
-  // items are self-serve leftovers and crowd the list).
+  const CARRIED_KEY = "eas-show-carried";     // "0"/"1" — "breakfast menu also served" items shown (all views)
+  const DIET_KEY = "eas-diet-filters";        // ["vegan","vegetarian",...] — active diet filters
+  const FILTER_SEEN_KEY = "eas-filter-seen";  // "1" — first-run "Filters" FAB hint already shown
+  // Restore the carried-items visibility switch (default: hidden — the
+  // hall's carried-over breakfast menu crowds the list in every view).
   try { state.showCarried = localStorage.getItem(CARRIED_KEY) === "1"; } catch (e) {}
+  // Restore persisted dietary filters (a person's diet is stable, so this is
+  // the one chip set that survives reloads — unlike the per-session expand sets).
+  try {
+    const dv = JSON.parse(localStorage.getItem(DIET_KEY) || "[]");
+    if (Array.isArray(dv)) state.dietFilters = new Set(dv.filter((id) => DIETS.some((d) => d.id === id)));
+  } catch (e) {}
   function isLight() { return document.documentElement.classList.contains("light"); }
   // "system" (default) follows the OS; explicit "light"/"dark" wins.
   function themeSetting() {
@@ -358,8 +428,8 @@
 
   function showError(msg) {
     state.data = null;
+    closeFiltersSheet();
     $("#hall-track").innerHTML = "";
-    $("#cat-row").hidden = true;
     $("#content").innerHTML = "";
     const d = el("div", "error");
     d.appendChild(el("div", null, "Could not load menus"));
@@ -375,6 +445,11 @@
   /* ---------- derived data ---------- */
 
   function matches(q, entry) {
+    // Dietary filters combine as AND (vegan + nut-free = both must hold) —
+    // that's what a person's actual constraints mean.
+    if (state.dietFilters.size) {
+      for (const d of state.dietFilters) if (!dietMatches(entry, d)) return false;
+    }
     if (!q) return true;
     const hay = (entry.item.name + " " + (entry.item.desc || "") + " " + entry.hall + " " + entry.station).toLowerCase();
     return q.split(/\s+/).every((w) => hay.includes(w));
@@ -414,11 +489,12 @@
     if (!state.data) return;
     renderChrome();
     renderHallRow();
-    renderCatRow();
     $("#date-label").textContent = state.date;
     $("#fetched-at").textContent =
       "Updated " + new Date(state.data.fetched_at).toLocaleString() + " · " + state.meal;
     renderContentOnly();
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
   }
 
   let userPickedHall = false; // set on chip click; persisted hall only applies before that
@@ -459,6 +535,8 @@
         if (!closed) { try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {} }
         gaEvent("select_hall", { hall: h.name, meal: state.meal, closed: closed });
         renderHallRow();
+        if (!$("#filters-sheet").hidden) renderFiltersSheet();
+        syncFilterFab();
         renderContentOnly();
       });
       row.appendChild(b);
@@ -470,63 +548,256 @@
     if (activeChip && !userPickedHall) {
       row.scrollLeft = activeChip.offsetLeft - (row.clientWidth - activeChip.clientWidth) / 2;
     }
+    syncHallFades();
   }
 
-  function renderCatRow() {
-    const row = $("#cat-row");
-    row.innerHTML = "";
-    if (state.view !== "categories") { row.hidden = true; syncCatFade(); return; }
-    row.hidden = false;
-    const counts = {};
-    // Counts follow the content scoping: all halls while searching,
-    // otherwise the selected hall only.
-    const entries = state.query ? allHallItems() : (() => {
-      const hall = (state.data.halls[state.hallIndex] || state.data.halls[0]);
-      return hall && !hall.closed && !hall.error ? hallItems(hall) : [];
-    })();
-    const hasCarriedAll = entries.some((e) => e.item.carried);
-    // Counts reflect what will actually render (carried items drop out when
-    // the switch is off), so a category with only carried items hides its chip.
-    const countable = state.showCarried ? entries : entries.filter((e) => !e.item.carried);
-    for (const e of countable) counts[e.item.cat] = (counts[e.item.cat] || 0) + 1;
-    const all = el("button", "cat-chip" + (state.cats.size === 0 ? " active" : ""));
-    all.textContent = "All";
-    all.addEventListener("click", () => { state.cats.clear(); renderCatRow(); renderContentOnly(); });
-    row.appendChild(all);
-    for (const c of CATEGORIES) {
-      if (!counts[c]) continue;
-      const b = el("button", "cat-chip" + (state.cats.has(c) ? " active" : ""));
-      b.innerHTML = "";
-      b.appendChild(document.createTextNode(CAT_EMOJI[c] + " "));
-      b.appendChild(document.createTextNode(CAT_LABEL[c]));
-      b.appendChild(el("span", "n", String(counts[c])));
-      b.addEventListener("click", () => {
-        if (state.cats.has(c)) state.cats.delete(c); else state.cats.add(c);
-        if (state.cats.size === CATEGORIES.length) state.cats.clear();
-        renderCatRow(); renderContentOnly();
-      });
-      row.appendChild(b);
+  // Hall chip row: soft edge fades signal more halls off-screen (the row's
+  // scrollbar is hidden). .at-start/.at-end on the row are updated on
+  // scroll, resize, and after each render.
+  function syncHallFades() {
+    const row = $("#hall-track");
+    const wrap = row && row.parentElement; // .hall-row
+    if (!row || !wrap) return;
+    const max = row.scrollWidth - row.clientWidth;
+    wrap.classList.toggle("at-start", max <= 0 || row.scrollLeft <= 2);
+    wrap.classList.toggle("at-end", max <= 0 || row.scrollLeft >= max - 2);
+  }
+
+  /* ---------- filters (FAB + bottom sheet) ----------
+     All filter controls — category chips, dietary chips, the "from
+     breakfast" switch — live in one bottom sheet behind the floating
+     Filters button. Content re-renders live as chips toggle (no Apply
+     step); the FAB badge shows how many filters are active. */
+
+  // Scope mirrors the content: all halls while searching, else the selected
+  // hall only. Counts don't apply the text query itself (same rule the old
+  // chip rows had).
+  function rawScopeEntries() {
+    if (state.query) return allHallItems();
+    const hall = (state.data.halls[state.hallIndex] || state.data.halls[0]);
+    return hall && !hall.closed && !hall.error ? hallItems(hall) : [];
+  }
+  // Distinct station names in scope, in first-appearance order (chip list
+  // for the Stations view's section filter).
+  function scopeStationNames() {
+    const out = [];
+    const seen = new Set();
+    for (const e of rawScopeEntries()) if (!seen.has(e.station)) { seen.add(e.station); out.push(e.station); }
+    return out;
+  }
+  function filterScopeEntries() {
+    const entries = rawScopeEntries();
+    // Carried items are hidden in EVERY view unless the switch is on —
+    // the counts should say what the view will actually show.
+    if (!state.query && !state.showCarried) {
+      return entries.filter((e) => !e.item.carried);
     }
-    // "From breakfast" visibility switch — only offered when the scope
-    // actually contains carried-over items.
-    if (hasCarriedAll) {
-      const w = el("button", "switch" + (state.showCarried ? " on" : ""));
+    return entries;
+  }
+  // Filters that are active in the CURRENT view: each view's section filter
+  // (Categories/Stations/Proteins) counts only in that view; diet and
+  // carried-items are global.
+  function activeFilterCount() {
+    let n = state.dietFilters.size;
+    if (state.view === "categories") n += state.cats.size;
+    else if (state.view === "stations") n += state.stations.size;
+    else if (state.view === "nutrition") n += state.proteins.size;
+    return n;
+  }
+  function canFilter() {
+    if (!state.data) return false;
+    return filterScopeEntries().length > 0;
+  }
+
+  function syncFilterFab() {
+    const fab = $("#filters-fab");
+    const wrap = $("#filters-fab-wrap");
+    const badge = $("#filters-badge");
+    const sheet = $("#filters-sheet");
+    if (!fab || !badge || !sheet) return;
+    const open = !sheet.hidden;
+    fab.classList.toggle("open", open);
+    fab.setAttribute("aria-expanded", String(open));
+    const disabled = !open && !canFilter();
+    fab.classList.toggle("disabled", disabled);
+    fab.toggleAttribute("disabled", disabled);
+    const n = activeFilterCount();
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+    // Filter changes flip the fade state too (the observer only re-fires on
+    // scroll changes, not on content re-renders).
+    if (typeof syncFabAway === "function") syncFabAway();
+    // First-run discoverability: a "Filters" label sits next to the FAB
+    // until the user opens the sheet once (FILTER_SEEN_KEY).
+    let seen = false;
+    try { seen = localStorage.getItem(FILTER_SEEN_KEY) === "1"; } catch (e) {}
+    if (wrap) wrap.classList.toggle("hint", !open && !seen);
+  }
+
+  function renderFiltersSheet() {
+    const body = $("#filters-body");
+    const meta = $("#filters-meta");
+    if (!body || !meta) return;
+    if (!state.data) { syncFilterFab(); return; }
+    let scope;
+    const mealCap = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
+    if (state.query) scope = "All halls · " + mealCap + " · \u201c" + state.query + "\u201d";
+    else {
+      const hall = state.data.halls[state.hallIndex] || state.data.halls[0];
+      scope = (hall ? hall.name : "") + " · " + mealCap;
+    }
+    meta.textContent = scope;
+
+    const entries = filterScopeEntries();
+    body.innerHTML = "";
+
+    // "Breakfast menu also served" — a scope/display control (which meal's
+    // items are shown), not a personal constraint, so it sits at the TOP
+    // under the scope line, above the Categories/Dietary attribute filters.
+    // All three views; only when the scope contains carried-over items.
+    const hasCarried = rawScopeEntries().some((e) => e.item.carried);
+    if (hasCarried) {
+      const w = el("button", "switch switch-row" + (state.showCarried ? " on" : ""));
       w.type = "button";
       w.setAttribute("role", "switch");
       w.setAttribute("aria-checked", String(state.showCarried));
-      w.title = state.showCarried ? "Hide items also in breakfast" : "Show items also in breakfast";
+      w.title = (state.showCarried ? "Hide" : "Show") + " breakfast menu items also served at " + state.meal;
       w.appendChild(el("span", "sw-track"));
-      w.appendChild(el("span", "sw-label", "from breakfast"));
+      // Meaning: the hall's breakfast menu is ALSO served at the selected
+      // meal; the switch shows/hides those carried-over items. Neutral label
+      // (ON/OFF is visible on the switch; the title says what tapping does,
+      // with the actual meal name).
+      w.appendChild(el("span", "sw-label", "Breakfast menu also served"));
       w.addEventListener("click", () => {
         state.showCarried = !state.showCarried;
         try { localStorage.setItem(CARRIED_KEY, state.showCarried ? "1" : "0"); } catch (e) {}
-        renderCatRow(); renderContentOnly();
+        afterFilterChange();
       });
-      row.appendChild(w);
+      body.appendChild(w);
     }
-    // Chip set changed: reset scroll and refresh the edge-fade hint.
-    row.scrollLeft = 0;
-    syncCatFade();
+
+    // Section filter — one row per view (per-session, not persisted),
+    // matching each view's own grouping: Categories view filters dish
+    // categories, Stations view filters stations, Nutrition view filters
+    // proteins. A view only ever shows its own row, so nothing here can
+    // silently affect another view.
+    const sectionSpec = state.view === "categories"
+      ? { label: "Categories", set: state.cats,
+          items: CATEGORIES.map((c) => ({ id: c, name: CAT_LABEL[c], emoji: CAT_EMOJI[c] })),
+          count: (e, id) => (e.item.cat === id ? 1 : 0) }
+      : state.view === "stations"
+      ? { label: "Stations", set: state.stations,
+          items: scopeStationNames().map((n) => ({ id: n, name: n, emoji: "" })),
+          count: (e, id) => (e.station === id ? 1 : 0) }
+      : { label: "Proteins", set: state.proteins,
+          items: PROTEINS.map((p) => ({ id: p.id, name: p.label, emoji: p.emoji })),
+          count: (e, id) => (detectProteins(e.item.name).some((p) => p.id === id) ? 1 : 0) };
+    const secCounts = {};
+    for (const e of entries)
+      for (const it of sectionSpec.items)
+        secCounts[it.id] = (secCounts[it.id] || 0) + sectionSpec.count(e, it.id);
+    body.appendChild(el("h3", "filters-label", sectionSpec.label));
+    const secWrap = el("div", "filters-chips");
+    const allSec = el("button", "cat-chip" + (sectionSpec.set.size === 0 ? " active" : ""));
+    allSec.type = "button";
+    allSec.textContent = "All";
+    allSec.addEventListener("click", () => { sectionSpec.set.clear(); afterFilterChange(); });
+    secWrap.appendChild(allSec);
+    const totalSecs = sectionSpec.items.filter((it) => secCounts[it.id]).length;
+    for (const it of sectionSpec.items) {
+      if (!secCounts[it.id]) continue;
+      const b = el("button", "cat-chip" + (sectionSpec.set.has(it.id) ? " active" : ""));
+      b.type = "button";
+      b.appendChild(document.createTextNode((it.emoji ? it.emoji + " " : "") + it.name));
+      // "Other" (categories) is a catch-all (condiments, toppings, produce,
+      // build-your-own) whose count is always the largest by far — it reads
+      // as noise, not a useful size cue, so drop its badge and let the real
+      // categories' counts stay comparable. The count still reaches screen
+      // readers.
+      if (sectionSpec.label === "Categories" && it.id === "other") b.setAttribute("aria-label", it.name + " " + secCounts[it.id]);
+      else b.appendChild(el("span", "n", String(secCounts[it.id])));
+      b.addEventListener("click", () => {
+        if (sectionSpec.set.has(it.id)) sectionSpec.set.delete(it.id); else sectionSpec.set.add(it.id);
+        if (sectionSpec.set.size === totalSecs) sectionSpec.set.clear();
+        afterFilterChange();
+      });
+      secWrap.appendChild(b);
+    }
+    body.appendChild(secWrap);
+
+    // Dietary (personal constraints — persisted in eas-diet-filters).
+    body.appendChild(el("h3", "filters-label", "Dietary"));
+    const dietWrap = el("div", "filters-chips");
+    for (const d of DIETS) {
+      const n = entries.filter((e) => dietMatches(e, d.id)).length;
+      const b = el("button", "diet-chip" + (state.dietFilters.has(d.id) ? " active" : ""));
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(state.dietFilters.has(d.id)));
+      b.title = "Filter items that look " + d.label.toLowerCase() + " from their ingredient list";
+      b.appendChild(document.createTextNode(d.label));
+      b.appendChild(el("span", "n", String(n)));
+      b.addEventListener("click", () => {
+        if (state.dietFilters.has(d.id)) state.dietFilters.delete(d.id);
+        else state.dietFilters.add(d.id);
+        try { localStorage.setItem(DIET_KEY, JSON.stringify(Array.from(state.dietFilters))); } catch (e) {}
+        gaEvent("toggle_diet_filter", { filter: d.id, on: state.dietFilters.has(d.id) });
+        afterFilterChange();
+      });
+      dietWrap.appendChild(b);
+    }
+    body.appendChild(dietWrap);
+
+    // Footer: Reset all — only when something is actually active. The sheet
+    // applies every change live, so there's no "Done/Apply" to confirm; the
+    // FAB (✕), backdrop, top-right ✕ and Escape all close it.
+    const reset = el("button", "filters-reset", "Reset all");
+    reset.type = "button";
+    const anyActive = activeFilterCount() > 0 || state.showCarried;
+    reset.hidden = !anyActive;
+    if (anyActive) {
+      const foot = el("div", "filters-foot");
+      reset.addEventListener("click", () => {
+        // Reset only what this view actually shows: each view's section
+        // filter (cats/stations/proteins) is invisible in the other views,
+        // so don't silently clear it from here.
+        if (state.view === "categories") state.cats.clear();
+        else if (state.view === "stations") state.stations.clear();
+        else if (state.view === "nutrition") state.proteins.clear();
+        state.dietFilters.clear();
+        state.showCarried = false;
+        try {
+          localStorage.setItem(DIET_KEY, "[]");
+          localStorage.setItem(CARRIED_KEY, "0");
+        } catch (e) {}
+        gaEvent("filter_reset", {});
+        afterFilterChange();
+      });
+      foot.appendChild(reset);
+      body.appendChild(foot);
+    }
+  }
+
+  function afterFilterChange() {
+    renderFiltersSheet();
+    syncFilterFab();
+    renderContentOnly();
+  }
+
+  function openFiltersSheet() {
+    const m = $("#filters-sheet");
+    if (!m || !m.hidden) return;
+    gaEvent("filter_sheet_open", { view: state.view, search: !!state.query });
+    m.hidden = false;
+    document.body.style.overflow = "hidden";
+    renderFiltersSheet();
+    syncFilterFab();
+  }
+  function closeFiltersSheet() {
+    const m = $("#filters-sheet");
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    document.body.style.overflow = "";
+    syncFilterFab();
   }
 
   function renderContentOnly() {
@@ -578,7 +849,8 @@
     { id: "noodle", emoji: "🍜", re: /\b(pad thai|ramen|sushi|dumplings?|spring ?rolls?|lo ?mein|chow ?mein|pho|udon|soba)\b/i },
     { id: "pasta", emoji: "🍝", re: /\b(pasta|macaroni|spaghetti|noodles?|penne|fettuccine|lasagna|gnocchi|orzo|farfalle|couscous)\b/i },
     { id: "rice", emoji: "🍚", re: /\b(rice|basmati|quinoa)\b/i },
-    { id: "egg", emoji: "🥚", re: /\b(eggs?)\b/i },
+    { id: "omelet", emoji: "🍳", re: /\b(omelets?|omelettes?)\b/i },
+  { id: "egg", emoji: "🥚", re: /\b(eggs?)\b/i },
     { id: "cheese", emoji: "🧀", re: /\b(cheese|queso)\b/i },
     { id: "dairy", emoji: "🧈", re: /\b(butter|buttermilk|milk|cream|sour ?cream|half and half)\b/i },
     { id: "bread", emoji: "🍞", re: /\b(bread|bagels?|croissant|buns?|rolls?|biscuits?|crackers?|croutons|baguette|naan|focaccia|ciabatta|waffles?|pancakes?|french toast|grinder|powerseed|seeded)\b/i },
@@ -606,7 +878,7 @@ function foodEmoji(name) {
   const PROTEINS = [
     { id: "beef",      label: "Beef",      emoji: "🥩", re: /\b(beef|steak|hamburg?er|roast beef)\b/i },
     { id: "pork",      label: "Pork",      emoji: "🐖", re: /\b(pork|sausage|bacon)\b|\bham\b(?!\w*burger)/i },
-    { id: "lamb",      label: "Lamb",      emoji: "🐑", re: /\blamb\b/i },    { id: "poultry",   label: "Poultry",   emoji: "🍗", re: /\b(chicken|turkey|drumstick|thighs?)\b/i },
+    { id: "lamb",      label: "Lamb",      emoji: "🐏", re: /\blamb\b/i },    { id: "poultry",   label: "Poultry",   emoji: "🍗", re: /\b(chicken|turkey|drumstick|thighs?)\b/i },
     { id: "fish",      label: "Fish",      emoji: "🐟", re: /\b(fish|salmon|tuna|cod|tilapia|trout|mackerel)\b/i },
     { id: "shellfish", label: "Shellfish", emoji: "🍤", re: /\b(shrimp|prawn|crab|lobster|scallop|calamari)\b/i },
     { id: "vegan",     label: "Vegan",     emoji: "🌱", re: /\b(tofu|tempeh|seitan|edamame|falafels?|lentils?|chickpeas?|quinoa|black beans?|kidney beans?|navy beans?|beans?)\b/i },
@@ -632,8 +904,7 @@ function foodEmoji(name) {
     const fe = foodEmojiSpan(entry.item);
     if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
-    // Carried tag: suppressed when the section groups carried items (redundant there).
-    if (entry.item.carried && !o.hideCarriedTag) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "breakfast menu"));
     if (entry.item.calories) b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     appendItemBadge(b, entry.item.cat, o.withBadge);
     b.addEventListener("click", () => openModal(entry));
@@ -736,48 +1007,79 @@ function foodEmoji(name) {
   // the cut) plus a "Show all" row. Expansion is per-session, not persisted.
   const CAT_PREVIEW = 8;
   const catExpanded = new Set();
-  // "Also in breakfast" groups (Stations view): collapsed by default; this
-  // stores which halls' groups the user has expanded.
-  const BF_STATE_KEY = "eas-bfgroup-expanded"; // ["<hall>||__breakfast__", ...] — expanded set
-  function bfGroupExpanded() {
+  // Stations and Nutrition mirror the Categories "preview + Show all N"
+  // behavior for long sections. Per-session, not persisted.
+  const stationExpanded = new Set();
+  const nutriExpanded = new Set();
+  // Nutrition protein sections are collapsible (like Categories); the collapsed
+  // set is persisted per protein id.
+  const NUTRI_STATE_KEY = "eas-nutrition-collapsed"; // [protein id, ...] — collapsed set
+  function nutriCollapsed() {
     try {
-      const v = JSON.parse(localStorage.getItem(BF_STATE_KEY) || "[]");
+      const v = JSON.parse(localStorage.getItem(NUTRI_STATE_KEY) || "[]");
       return new Set(Array.isArray(v) ? v : Object.keys(v));
-    }
-    catch (e) { return new Set(); }
+    } catch (e) { return new Set(); }
   }
-  function setBfGroupExpanded(key, expanded) {
-    const s = bfGroupExpanded();
-    if (expanded) s.add(key); else s.delete(key);
-    try { localStorage.setItem(BF_STATE_KEY, JSON.stringify(Array.from(s))); }
-    catch (e) {}
+  function setNutriCollapsed(id, collapsed) {
+    const s = nutriCollapsed();
+    if (collapsed) s.add(id); else s.delete(id);
+    try { localStorage.setItem(NUTRI_STATE_KEY, JSON.stringify(Array.from(s))); } catch (e) {}
   }
-
+  // Entrees first (CATEGORIES rank), then the rest in menu order — stable
+  // sort, so within-category menu order is preserved.
+  const CAT_RANK = {};
+  CATEGORIES.forEach((c, i) => { CAT_RANK[c] = i; });
+  const byCatRank = (items) => items.sort((a, b) =>
+    (CAT_RANK[a.item.cat] ?? CATEGORIES.length) - (CAT_RANK[b.item.cat] ?? CATEGORIES.length));
+  // "+ N more" progressive-disclosure row; N is the number of items the
+  // click will reveal (total minus the preview already shown).
+  function makeShowAllButton(moreCount, onShow) {
+    const more = el("button", "show-all");
+    more.type = "button";
+    more.textContent = "+" + moreCount + " more";
+    more.addEventListener("click", onShow);
+    return more;
+  }
+  // Empty-state message: search and diet filters get distinct wording.
+  function filterEmptyMsg(searching) {
+    if (searching) return "No dishes match your search.";
+    if (state.dietFilters.size) return "No dishes match the selected filters.";
+    return "No dishes to show.";
+  }
   function renderStations() {
     const c = $("#content");
     c.innerHTML = "";
     const q = state.query.toLowerCase();
     const searching = !!q;
+    // Search suppresses progressive disclosure (surface every match). Diet
+    // filters keep it: a filtered view previews CAT_PREVIEW + "+ N more" like
+    // the unfiltered view, since matches are still a browsable list.
+    const filtering = searching;
+    // "Breakfast menu also served" switch: when off, carried items are
+    // hidden from the stations — same rule as the other views.
+    const hideCarried = !state.showCarried;
+    // Section filter: when active, only the selected stations render.
+    const stFilter = state.stations;
     // No search: the selected hall. Search: every open hall.
     const halls = searching
       ? state.data.halls.filter((h) => !h.closed && !h.error)
       : [selectedHall(c)];
     if (!searching && !halls[0]) return;
     const collapsed = stationCollapsed();
-    const bfExpanded = bfGroupExpanded();
     let shown = 0;
     for (const hall of halls) {
       if (!hall) continue;
       const byStation = {};
       const order = [];
-      const carriedItems = [];
       for (const s of hall.stations) {
+        if (stFilter.size && !stFilter.has(s.name)) continue;
         for (const it of s.items) {
           const e = { item: it, hall: hall.name, station: s.name };
           if (!matches(q, e)) continue;
-          // Carried-over breakfast items move to their own collapsible group
-          // instead of living inside their stations.
-          if (it.carried) { carriedItems.push(e); continue; }
+          // Carried-over breakfast items live in their own station with a
+          // "breakfast menu" tag (hidden when the "Breakfast menu also
+          // served" switch is off).
+          if (it.carried && hideCarried) continue;
           if (!byStation[s.name]) { byStation[s.name] = { group: s.group, items: [] }; order.push(s.name); }
           byStation[s.name].items.push(e);
         }
@@ -788,18 +1090,20 @@ function foodEmoji(name) {
       for (const name of order) {
         const st = byStation[name];
         if (!st.items.length) continue;
+        // Entrees first so the decision-relevant items aren't buried.
+        byCatRank(st.items);
         const key = hall.name + "||" + name;
         const box = el("section", "station");
-        const head = el("button", "station-head");
+        const head = el("button", "cat-head");
         head.type = "button";
         const isCollapsed = collapsed.has(key);
         if (isCollapsed) box.classList.add("collapsed");
         head.setAttribute("aria-expanded", String(!isCollapsed));
         if (searching) {
-          head.appendChild(el("span", "station-name", hall.name));
+          head.appendChild(el("span", "cat-head-label", hall.name));
           head.appendChild(el("span", "station-group", name));
         } else {
-          head.appendChild(el("span", "station-name", name));
+          head.appendChild(el("span", "cat-head-label", name));
           if (st.group) head.appendChild(el("span", "station-group", st.group));
         }
         const chev = el("span", "chev");
@@ -808,8 +1112,20 @@ function foodEmoji(name) {
         head.appendChild(chev);
         box.appendChild(head);
         const ul = el("ul", "items");
-        for (const it of st.items) ul.appendChild(makeItemButton(it));
+        // Progressive disclosure (mirrors Categories): long stations preview
+        // CAT_PREVIEW items + a "Show all" row; expansion is per-session and
+        // suppressed during search (a search should surface all matches).
+        const skey = hall.name + "||" + name;
+        const sExpanded = stationExpanded.has(skey);
+        const sVisible = sExpanded || filtering ? st.items : st.items.slice(0, CAT_PREVIEW);
+        for (const it of sVisible) ul.appendChild(makeItemButton(it));
         box.appendChild(ul);
+        if (!filtering && st.items.length > CAT_PREVIEW && !sExpanded) {
+          box.appendChild(makeShowAllButton(st.items.length - CAT_PREVIEW, () => {
+            stationExpanded.add(skey);
+            renderStations();
+          }));
+        }
         head.addEventListener("click", () => {
           const nowCollapsed = box.classList.toggle("collapsed");
           head.setAttribute("aria-expanded", String(!nowCollapsed));
@@ -817,40 +1133,8 @@ function foodEmoji(name) {
         });
         c.appendChild(box);
       }
-      // "Also in breakfast" group: collapsed by default so carried items stay
-      // visible-but-unobtrusive; expanding a hall's group is remembered.
-      if (carriedItems.length) {
-        shown += carriedItems.length;
-        const key = hall.name + "||__breakfast__";
-        const expanded = bfExpanded.has(key);
-        const box = el("section", "station carried-group" + (expanded ? "" : " collapsed"));
-        const head = el("button", "station-head");
-        head.type = "button";
-        head.setAttribute("aria-expanded", String(expanded));
-        if (searching) {
-          head.appendChild(el("span", "station-name", hall.name));
-          head.appendChild(el("span", "station-group", "Also in breakfast  (" + carriedItems.length + ")"));
-        } else {
-          head.appendChild(el("span", "station-name", "Also in breakfast"));
-          head.appendChild(el("span", "station-group", "(" + carriedItems.length + ")"));
-        }
-        const chev = el("span", "chev");
-        chev.innerHTML = CHEV;
-        chev.setAttribute("aria-hidden", "true");
-        head.appendChild(chev);
-        box.appendChild(head);
-        const ul = el("ul", "items");
-        for (const it of carriedItems) ul.appendChild(makeItemButton(it, { hideCarriedTag: true }));
-        box.appendChild(ul);
-        head.addEventListener("click", () => {
-          const nowExpanded = !box.classList.toggle("collapsed");
-          head.setAttribute("aria-expanded", String(nowExpanded));
-          setBfGroupExpanded(key, nowExpanded);
-        });
-        c.appendChild(box);
-      }
     }
-    if (!shown) c.appendChild(el("div", "empty", searching ? "No dishes match your search." : "No dishes to show."));
+    if (!shown) c.appendChild(el("div", "empty", filterEmptyMsg(searching)));
   }
 
   // Item button for a "list" section (cat-section/cat-list): name, carried
@@ -862,7 +1146,7 @@ function foodEmoji(name) {
     const fe = foodEmojiSpan(entry.item);
     if (fe) b.appendChild(fe);
     b.appendChild(document.createTextNode(entry.item.name));
-    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "from breakfast"));
+    if (entry.item.carried) b.appendChild(el("span", "carried-tag", "breakfast menu"));
     if (entry.item.calories && calEntree && entry.item.cat === "entree") b.appendChild(el("span", "cal", Math.round(entry.item.calories) + " cal"));
     b.appendChild(el("span", "hall-tag", entryTag(entry, searching)));
     appendItemBadge(b, entry.item.cat, withBadge);
@@ -875,6 +1159,8 @@ function foodEmoji(name) {
     c.innerHTML = "";
     const q = state.query.toLowerCase();
     const searching = !!q;
+    // Only search suppresses progressive disclosure; diet filters keep it.
+    const filtering = searching;
     // Search spans all halls; otherwise the selected hall only.
     let entries;
     const hideCarried = !state.showCarried;
@@ -889,7 +1175,7 @@ function foodEmoji(name) {
         (state.cats.size === 0 || state.cats.has(e.item.cat)) && matches(q, e) &&
         (!hideCarried || !e.item.carried));
     }
-    if (!entries.length) { c.appendChild(el("div", "empty", "No dishes match your search.")); return; }
+    if (!entries.length) { c.appendChild(el("div", "empty", filterEmptyMsg(searching))); return; }
     const byCat = {};
     for (const e of entries) (byCat[e.item.cat] = byCat[e.item.cat] || []).push(e);
     const collapsed = catCollapsed();
@@ -917,14 +1203,14 @@ function foodEmoji(name) {
       // Progressive disclosure: long sections show a preview plus a
       // "Show all" row (expansion is per-session, not persisted).
       const expanded = catExpanded.has(cat);
-      const visible = expanded ? list : list.slice(0, CAT_PREVIEW);
-      const previewed = !expanded && list.length > CAT_PREVIEW;
+      const visible = expanded || filtering ? list : list.slice(0, CAT_PREVIEW);
+      const previewed = !expanded && !filtering && list.length > CAT_PREVIEW;
       const ul = el("ul", "cat-list");
       for (const e of visible) ul.appendChild(makeListItemButton(e, searching, false, true));
       if (previewed) {
         const more = el("button", "show-all");
         more.type = "button";
-        more.textContent = "Show all " + list.length;
+        more.textContent = "+" + (list.length - CAT_PREVIEW) + " more";
         more.addEventListener("click", () => {
           catExpanded.add(cat);
           renderCategories();
@@ -955,6 +1241,8 @@ function foodEmoji(name) {
     c.innerHTML = "";
     const q = state.query.toLowerCase();
     const searching = !!q;
+    // Only search suppresses progressive disclosure; diet filters keep it.
+    const filtering = searching;
     let entries;
     if (searching) {
       entries = allHallItems().filter((e) => matches(q, e));
@@ -963,24 +1251,63 @@ function foodEmoji(name) {
       if (!hall) return;
       entries = hallItems(hall).filter((e) => matches(q, e));
     }
-    if (!entries.length) { c.appendChild(el("div", "empty", "No dishes match your search.")); return; }
+    if (!entries.length) { c.appendChild(el("div", "empty", filterEmptyMsg(searching))); return; }
+    // "Breakfast menu also served" switch: when off, carried items don't
+    // appear in the protein sections — same rule as the other views.
+    const hideCarried = !state.showCarried;
+    if (hideCarried) entries = entries.filter((e) => !e.item.carried);
+    if (!entries.length) { c.appendChild(el("div", "empty", filterEmptyMsg(searching))); return; }
     const byProtein = {};
     for (const e of entries) {
       for (const p of detectProteins(e.item.name)) (byProtein[p.id] = byProtein[p.id] || []).push(e);
     }
+    // Section filter: when active, only the selected protein sections render.
+    const prFilter = state.proteins;
+    const collapsed = nutriCollapsed();
     let shown = false;
     for (const p of PROTEINS) {
       const list = byProtein[p.id];
       if (!list || !list.length) continue;
+      if (prFilter.size && !prFilter.has(p.id)) continue;
       shown = true;
-      const sec = el("section", "cat-section");
-      sec.appendChild(el("h2", null, p.emoji + " " + p.label + "  (" + list.length + ")"));
+      // Entrees first so the decision-relevant dishes aren't buried.
+      byCatRank(list);
+      // Collapsible section header (like Categories); collapsed set persisted.
+      const isCollapsed = collapsed.has(p.id);
+      const sec = el("section", "cat-section" + (isCollapsed ? " collapsed" : ""));
+      const head = el("button", "cat-head");
+      head.type = "button";
+      head.setAttribute("aria-expanded", String(!isCollapsed));
+      const label = el("span", "cat-head-label");
+      label.textContent = p.emoji + " " + p.label + "  (" + list.length + ")";
+      head.appendChild(label);
+      const chev = el("span", "chev");
+      chev.innerHTML = CHEV;
+      chev.setAttribute("aria-hidden", "true");
+      head.appendChild(chev);
+      sec.appendChild(head);
       const ul = el("ul", "cat-list");
-      for (const e of list) ul.appendChild(makeListItemButton(e, searching));
+      // Progressive disclosure (mirrors Categories): long protein sections
+      // preview CAT_PREVIEW items + a "Show all" row; per-session, suppressed
+      // during search.
+      const nExpanded = nutriExpanded.has(p.id);
+      const nVisible = nExpanded || filtering ? list : list.slice(0, CAT_PREVIEW);
+      for (const e of nVisible) ul.appendChild(makeListItemButton(e, searching));
+      if (!filtering && list.length > CAT_PREVIEW && !nExpanded) {
+        ul.appendChild(makeShowAllButton(list.length - CAT_PREVIEW, () => {
+          nutriExpanded.add(p.id);
+          renderNutrition();
+        }));
+      }
       sec.appendChild(ul);
+      head.addEventListener("click", () => {
+        const nowCollapsed = sec.classList.toggle("collapsed");
+        head.setAttribute("aria-expanded", String(!nowCollapsed));
+        setNutriCollapsed(p.id, nowCollapsed);
+      });
       c.appendChild(sec);
     }
-    if (!shown) c.appendChild(el("div", "empty", "No dishes match your search."));
+    if (!shown) c.appendChild(el("div", "empty", filterEmptyMsg(searching)));
   }
 
   /* ---------- analytics (GA4, optional — no-op if gtag absent) ---------- */
@@ -1018,7 +1345,7 @@ function foodEmoji(name) {
     catDiv.appendChild(el("span", "hall-tag", entry.hall + " · " + entry.station));
     const meta = [];
     if (it.calories) meta.push(Math.round(it.calories) + " calories");
-    if (it.carried && state.meal !== "breakfast") meta.push("also in breakfast");
+    if (it.carried && state.meal !== "breakfast") meta.push("breakfast menu");
     $("#modal-meta").textContent = meta.join(" · ");
     $("#modal-desc").textContent = it.desc || "";
     $("#modal-desc").hidden = !it.desc;
@@ -1168,8 +1495,16 @@ function foodEmoji(name) {
         if (day.closed) {
           row.appendChild(el("span", "hours-day-slots", "Closed"));
         } else {
-          const slots = (day.slots || []).map((s) => s.open && s.close ? s.open + "–" + s.close : (s.raw || "")).join(", ");
-          row.appendChild(el("span", "hours-day-slots", slots || "—"));
+          // Each slot is one unsplittable unit: the line can break only at
+          // the comma between slots, never mid-slot ("4:30 pm–9:00 pm" stays
+          // together instead of wrapping after "9:00" and orphaning "pm").
+          const slotsEl = el("span", "hours-day-slots");
+          const parts = day.slots || [];
+          parts.forEach((s, i) => {
+            if (i) slotsEl.appendChild(document.createTextNode(", "));
+            slotsEl.appendChild(el("span", "hours-slot", s.open && s.close ? s.open + "–" + s.close : (s.raw || "")));
+          });
+          row.appendChild(slotsEl.childNodes.length ? slotsEl : el("span", "hours-day-slots", "—"));
         }
         daysEl.appendChild(row);
       }
@@ -1191,7 +1526,8 @@ function foodEmoji(name) {
       b.classList.toggle("active", x === v);
       b.setAttribute("aria-selected", String(x === v));
     });
-    renderCatRow();
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
     renderContentOnly();
   }
 
@@ -1207,7 +1543,8 @@ function foodEmoji(name) {
       searchInput.value = "";
       state.query = "";
       $("#search-clear").hidden = true;
-      renderCatRow();
+      if (!$("#filters-sheet").hidden) renderFiltersSheet();
+      syncFilterFab();
       renderContentOnly();
     }
   }
@@ -1216,14 +1553,17 @@ function foodEmoji(name) {
     state.query = searchInput.value.trim();
     $("#search-clear").hidden = !state.query;
     if (state.query) gaSearch(state.query);
-    renderCatRow(); // chip counts follow the search scoping (all halls)
+    // Chip counts follow the search scoping (all halls)
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
     renderContentOnly();
   });
   $("#search-clear").addEventListener("click", () => {
     searchInput.value = "";
     state.query = "";
     $("#search-clear").hidden = true;
-    renderCatRow();
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
     renderContentOnly();
   });
 
@@ -1240,6 +1580,8 @@ function foodEmoji(name) {
     state.meal = m;
     renderChrome(); // updates the meal button label + in-menu tabs immediately
     closeMoreMenu(); // picker chose a meal — collapse the menu
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
     // instant: show any cached snapshot for this meal
     const today = todayStr();
     const cached = loadCache(m, today);
@@ -1308,21 +1650,73 @@ function foodEmoji(name) {
     }, { passive: false });
   }
   const hallTrack = $("#hall-track");
-  if (hallTrack) wheelScrollRow(hallTrack);
-  const catRow = $("#cat-row");
-  if (catRow) wheelScrollRow(catRow);
-
-  // Category-row edge fade: hint that more chips are off-screen to the
-  // right; hidden at the end of the row or when nothing overflows.
-  const catWrap = $("#cat-row-wrap");
-  function syncCatFade() {
-    if (!catWrap || !catRow || catRow.hidden) { if (catWrap) catWrap.classList.remove("fade"); return; }
-    const max = catRow.scrollWidth - catRow.clientWidth;
-    catWrap.classList.toggle("fade", max > 1 && catRow.scrollLeft < max - 1);
+  if (hallTrack) {
+    wheelScrollRow(hallTrack);
+    hallTrack.addEventListener("scroll", syncHallFades, { passive: true });
+    window.addEventListener("resize", syncHallFades);
   }
-  if (catRow) {
-    catRow.addEventListener("scroll", syncCatFade, { passive: true });
-    window.addEventListener("resize", syncCatFade);
+
+  // Filters FAB: opens the bottom sheet. First open marks the FAB as
+  // "seen" so the discoverability label never comes back.
+  const filtersFab = $("#filters-fab");
+  if (filtersFab) {
+    filtersFab.addEventListener("click", () => {
+      const sheet = $("#filters-sheet");
+      if (!sheet.hidden) { closeFiltersSheet(); return; }
+      try { localStorage.setItem(FILTER_SEEN_KEY, "1"); } catch (e) {}
+      openFiltersSheet();
+    });
+  }
+  $("#filters-sheet").addEventListener("click", (e) => { if (e.target.closest("[data-filters-close]")) closeFiltersSheet(); });
+  // Escape closes the filters sheet too (hours/about modals close themselves).
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeFiltersSheet(); });
+
+  // Footer reaches the FAB → fade the FAB out so it never covers the
+  // footer's centered text (measured: the text overlaps the FAB's left
+  // ~13px at rest). NEVER fade while filters are active — a filtered/
+  // empty result shortens the page, and hiding the only re-entry point to
+  // the filters strands the user. Also never fade when the footer is
+  // already visible at REST (scrollY ≈ 0): on short pages (small hall,
+  // few search results) the FAB would load hidden and only reappear once
+  // the user expanded a section — undiscoverable (Tony, 2026-09-19);
+  // there, the 13px text tuck under the FAB's edge is the acceptable cost.
+  // Trigger boundary: the FAB's BOTTOM edge (the only reachable one — the
+  // footer top sits 788 vs the FAB top 780 at max scroll, so a top-edge
+  // boundary would never fire). The older threshold:0 observer faded the
+  // whole ~56px of the footer's first appearance, i.e. while it was still
+  // off-screen and the FAB was covering the last category header — that
+  // read as a glitch in the Categories view. The IO only fires on
+  // intersection CHANGES, so the class is derived state (footerVisible ×
+  // scrolled × filter count), recomputed from scroll, resize, and every
+  // filter change.
+  let footerVisible = false;
+  function syncFabAway() {
+    if (!filtersFab) return;
+    filtersFab.parentElement.classList.toggle(
+      "away", footerVisible && window.scrollY > 4 && activeFilterCount() === 0
+    );
+  }
+  const footer = $(".footer");
+  let fabObs = null;
+  if (filtersFab && footer && "IntersectionObserver" in window) {
+    const makeObs = () => {
+      if (fabObs) fabObs.disconnect();
+      const r = filtersFab.getBoundingClientRect();
+      // Root bottom = the FAB's BOTTOM edge. The footer top crosses this
+      // only once the footer has risen onto the FAB (it can't scroll higher
+      // than the page end, so a top-edge boundary would never be reached).
+      const margin = "0px 0px -" + Math.max(0, Math.round(window.innerHeight - r.bottom)) + "px 0px";
+      fabObs = new IntersectionObserver((es) => {
+        footerVisible = es[0].isIntersecting;
+        syncFabAway();
+      }, { rootMargin: margin });
+      fabObs.observe(footer);
+    };
+    makeObs();
+    window.addEventListener("resize", makeObs);
+    // The IO doesn't re-fire while the footer stays intersected (short
+    // pages), but the scrollY>4 condition still needs re-checking.
+    window.addEventListener("scroll", syncFabAway, { passive: true });
   }
 
   // Default meal by local time: 9:00–11:00 breakfast, 11:00–16:30 lunch,
