@@ -679,11 +679,18 @@
     return hall && !hall.closed && !hall.error ? hallItems(hall) : [];
   }
   // Distinct station names in scope, in first-appearance order (chip list
-  // for the Stations view's section filter).
-  function scopeStationNames() {
+  // for the Stations view's section filter). While searching (all halls),
+  // the same station name can exist in multiple halls — e.g. every hall
+  // has a "Grill" — so each chip there is keyed by hall+station instead of
+  // station alone, or filtering "Grill" would silently include every
+  // hall's Grill with no way to pick just one.
+  function scopeStationEntries() {
     const out = [];
     const seen = new Set();
-    for (const e of rawScopeEntries()) if (!seen.has(e.station)) { seen.add(e.station); out.push(e.station); }
+    for (const e of rawScopeEntries()) {
+      const id = state.query ? e.hall + "||" + e.station : e.station;
+      if (!seen.has(id)) { seen.add(id); out.push({ id, station: e.station, hall: e.hall }); }
+    }
     return out;
   }
   function filterScopeEntries() {
@@ -813,8 +820,10 @@
            count: (e, id) => (e.item.cat === id ? 1 : 0), badge: true }]
       : state.view === "stations"
       ? [{ label: "\u{1F4CD} Stations", key: "stations", set: state.stations,
-           items: scopeStationNames().map((n) => ({ id: n, name: n, emoji: "" })),
-           count: (e, id) => (e.station === id ? 1 : 0), badge: true }]
+           items: scopeStationEntries().map((e) => ({
+             id: e.id, name: state.query ? e.station + " \u00b7 " + e.hall : e.station, emoji: ""
+           })),
+           count: (e, id) => ((state.query ? e.hall + "||" + e.station : e.station) === id ? 1 : 0), badge: true }]
       : state.view === "nutrition"
       ? [{ label: "\u{1F34E} Nutrition", key: "nutrition", set: state.nutriSections,
            items: NUTRI_SECTIONS.map((s) => ({ id: s.id, name: s.label, emoji: s.emoji })),
@@ -983,14 +992,15 @@
     renderContentOnly();
   }
 
-  function openFiltersSheet() {
+  function openFiltersSheet(focusSearch) {
     const m = $("#filters-sheet");
-    if (!m || !m.hidden) return;
+    if (!m || !m.hidden) { if (focusSearch) $("#search").focus(); return; }
     gaEvent("filter_sheet_open", { view: state.view, search: !!state.query });
     m.hidden = false;
     document.body.style.overflow = "hidden";
     renderFiltersSheet();
     syncFilterFab();
+    if (focusSearch) $("#search").focus();
   }
   function closeFiltersSheet() {
     const m = $("#filters-sheet");
@@ -1013,9 +1023,14 @@
     const c = $("#content");
     if (state.query && c.firstChild) {
       const n = filterScopeEntries().length;
-      const banner = el("div", "search-scope-banner",
-        "\u{1F50D} Searching all halls \u00b7 " + state.meal.charAt(0).toUpperCase() + state.meal.slice(1) +
-        " for \u201c" + state.query + "\u201d \u00b7 " + n + " match" + (n === 1 ? "" : "es"));
+      const banner = el("button", "search-scope-banner");
+      banner.type = "button";
+      banner.textContent = "\u{1F50D} Searching all halls \u00b7 " + state.meal.charAt(0).toUpperCase() + state.meal.slice(1) +
+        " for \u201c" + state.query + "\u201d \u00b7 " + n + " match" + (n === 1 ? "" : "es");
+      // Tapping it reopens the Filters sheet with the search box focused —
+      // the query lives there now, so this is the fastest way back to it
+      // without hunting for the Filters FAB.
+      banner.addEventListener("click", () => openFiltersSheet(true));
       c.insertBefore(banner, c.firstChild);
     }
   }
@@ -1422,7 +1437,8 @@ function foodEmoji(name) {
       const byStation = {};
       const order = [];
       for (const s of hall.stations) {
-        if (stFilter.size && !stFilter.has(s.name)) continue;
+        const stId = searching ? hall.name + "||" + s.name : s.name;
+        if (stFilter.size && !stFilter.has(stId)) continue;
         for (const it of s.items) {
           const e = { item: it, hall: hall.name, station: s.name };
           if (!matches(q, e)) continue;
@@ -1976,9 +1992,47 @@ function foodEmoji(name) {
     renderContentOnly();
   }
 
+  // Swipe left/right on the content area to switch views, in the same
+  // order the tabs are laid out (Categories, Stations, Nutrition) — not
+  // VIEWS' internal order above, which is unrelated to the visual order.
+  const SWIPE_VIEWS = ["categories", "stations", "nutrition"];
+  (function setupSwipe() {
+    const c = $("#content");
+    if (!c) return;
+    let sx = 0, sy = 0, tracking = false;
+    const THRESHOLD = 50; // px — deliberate swipe, not an accidental drag
+    c.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) { tracking = false; return; }
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+    c.addEventListener("touchend", (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      // Require a mostly-horizontal gesture so vertical scrolling never
+      // gets misread as a swipe.
+      if (Math.abs(dx) < THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const i = SWIPE_VIEWS.indexOf(state.view);
+      if (i === -1) return;
+      const next = dx < 0 ? i + 1 : i - 1; // left swipe → next view, right swipe → previous
+      if (next < 0 || next >= SWIPE_VIEWS.length) return;
+      setView(SWIPE_VIEWS[next]);
+    }, { passive: true });
+  })();
+
   const searchInput = $("#search");
   searchInput.addEventListener("input", () => {
+    const wasSearching = !!state.query;
     state.query = searchInput.value.trim();
+    // Station filter ids are hall-qualified only while searching (a station
+    // name like "Grill" exists in multiple halls) — the ids scheme changes
+    // the moment search starts/stops, so a stale selection could silently
+    // stop matching anything. Clear it on that transition only.
+    if (!!state.query !== wasSearching) state.stations.clear();
     $("#search-clear").hidden = !state.query;
     if (state.query) gaSearch(state.query);
     // Chip counts follow the search scoping (all halls); the hall row
@@ -1990,6 +2044,7 @@ function foodEmoji(name) {
   });
   $("#search-clear").addEventListener("click", () => {
     searchInput.value = "";
+    if (state.query) state.stations.clear(); // was searching — see note above
     state.query = "";
     $("#search-clear").hidden = true;
     renderHallRow();
