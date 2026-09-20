@@ -357,6 +357,18 @@ html.light #filters-fab { color: #fff; }
 /* Light theme: --accent2 is a dark amber there, so dark badge text would
    vanish — white, same reasoning as the FAB icon. */
 html.light #filters-badge { color: #fff; }
+/* Search-mode indicator on the FAB itself: distinct color + a small
+   magnifying-glass badge, so entering/leaving search is obvious at a
+   glance without opening the sheet or noticing the in-content banner. */
+#filters-fab.searching { background: #2f8fe0; color: #fff; }
+#filters-search-badge {
+  position: absolute; top: -2px; left: -2px;
+  width: 20px; height: 20px; border-radius: 999px;
+  background: #fff; color: #2f8fe0;
+  display: grid; place-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+#filters-search-badge svg { width: 12px; height: 12px; display: block; }
 @media (max-width: 400px) {
   #filters-fab-wrap { right: 12px; bottom: calc(12px + var(--safe-bottom)); }
   #filters-fab { width: 52px; height: 52px; }
@@ -551,10 +563,24 @@ html.light #filters-badge { color: #fff; }
   font: inherit; font-size: .82rem; font-weight: 600; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-radius: 10px; padding: 8px 12px; margin-bottom: 14px;
+  border-radius: 10px; padding: 8px 12px;
   cursor: pointer;
 }
 .search-scope-banner:hover, .search-scope-banner:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.search-scope-wrap {
+  display: flex; align-items: stretch; gap: 6px; margin-bottom: 14px;
+}
+.search-scope-wrap .search-scope-banner { margin-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.search-scope-clear {
+  flex: 0 0 auto; width: 36px;
+  font-size: 1.1rem; line-height: 1; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 10px; cursor: pointer;
+}
+.search-scope-clear:hover, .search-scope-clear:focus-visible {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 

@@ -736,6 +736,13 @@
     const n = activeFilterCount();
     badge.hidden = n === 0;
     badge.textContent = String(n);
+    // Discoverability: the FAB itself signals "you're searching" (tinted +
+    // magnifying-glass badge) so leaving/re-entering search mode is obvious
+    // without having to notice the scope banner or reopen the sheet.
+    const searching = !!state.query;
+    fab.classList.toggle("searching", searching);
+    const searchBadge = $("#filters-search-badge");
+    if (searchBadge) searchBadge.hidden = !searching;
     // Filter changes flip the fade state too (the observer only re-fires on
     // scroll changes, not on content re-renders).
     if (typeof syncFabAway === "function") syncFabAway();
@@ -1010,6 +1017,22 @@
     syncFilterFab();
   }
 
+  // One-tap exit from search mode — shared by the scope-banner's × and the
+  // clear (×) button inside the Filters sheet's search input, so both
+  // "doors" out of search behave identically.
+  function exitSearch() {
+    const input = $("#search");
+    if (input) input.value = "";
+    if (state.query) state.stations.clear(); // was searching — see note above
+    state.query = "";
+    const clearBtn = $("#search-clear");
+    if (clearBtn) clearBtn.hidden = true;
+    renderHallRow();
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
+    renderContentOnly();
+  }
+
   function renderContentOnly() {
     if (state.view === "stations") renderStations();
     else if (state.view === "categories") renderCategories();
@@ -1023,6 +1046,7 @@
     const c = $("#content");
     if (state.query && c.firstChild) {
       const n = filterScopeEntries().length;
+      const wrap = el("div", "search-scope-wrap");
       const banner = el("button", "search-scope-banner");
       banner.type = "button";
       banner.textContent = "\u{1F50D} Searching all halls \u00b7 " + state.meal.charAt(0).toUpperCase() + state.meal.slice(1) +
@@ -1031,7 +1055,20 @@
       // the query lives there now, so this is the fastest way back to it
       // without hunting for the Filters FAB.
       banner.addEventListener("click", () => openFiltersSheet(true));
-      c.insertBefore(banner, c.firstChild);
+      const clearBtn = el("button", "search-scope-clear");
+      clearBtn.type = "button";
+      clearBtn.setAttribute("aria-label", "Exit search");
+      clearBtn.title = "Exit search";
+      clearBtn.textContent = "\u00d7";
+      // A one-tap way OUT of search mode too — previously the only exit was
+      // opening the sheet and finding the clear (×) on the input itself.
+      clearBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        exitSearch();
+      });
+      wrap.appendChild(banner);
+      wrap.appendChild(clearBtn);
+      c.insertBefore(wrap, c.firstChild);
     }
   }
 
@@ -2043,14 +2080,7 @@ function foodEmoji(name) {
     renderContentOnly();
   });
   $("#search-clear").addEventListener("click", () => {
-    searchInput.value = "";
-    if (state.query) state.stations.clear(); // was searching — see note above
-    state.query = "";
-    $("#search-clear").hidden = true;
-    renderHallRow();
-    if (!$("#filters-sheet").hidden) renderFiltersSheet();
-    syncFilterFab();
-    renderContentOnly();
+    exitSearch();
     searchInput.focus();
   });
 
