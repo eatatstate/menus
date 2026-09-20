@@ -631,6 +631,7 @@
       b.textContent = h.name + (closed ? "  closed" : "");
       b.addEventListener("click", () => {
         if (state.query) return; // hall chips are frozen while searching
+        saveScrollPos();
         userPickedHall = true;
         state.hallIndex = i;
         if (!closed) { try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {} }
@@ -639,6 +640,7 @@
         if (!$("#filters-sheet").hidden) renderFiltersSheet();
         syncFilterFab();
         renderContentOnly();
+        restoreScrollPos();
       });
       row.appendChild(b);
     });
@@ -1023,7 +1025,7 @@
   function exitSearch() {
     const input = $("#search");
     if (input) input.value = "";
-    if (state.query) state.stations.clear(); // was searching — see note above
+    if (state.query) { saveScrollPos(); state.stations.clear(); } // was searching — see note above
     state.query = "";
     const clearBtn = $("#search-clear");
     if (clearBtn) clearBtn.hidden = true;
@@ -1031,6 +1033,7 @@
     if (!$("#filters-sheet").hidden) renderFiltersSheet();
     syncFilterFab();
     renderContentOnly();
+    restoreScrollPos();
   }
 
   function renderContentOnly() {
@@ -2013,9 +2016,24 @@ function foodEmoji(name) {
 
   /* ---------- controls ---------- */
 
+  // Remember scroll position per hall+view (in-memory, session-only —
+  // reopening the app fresh starts at the top like normal). Keyed by hall
+  // NAME (stable across re-fetches) not index, and by "__search__" while a
+  // query is active since results span every hall then.
+  const scrollPositions = new Map();
+  function scrollKey() {
+    const hall = state.query
+      ? "__search__"
+      : (state.data && state.data.halls[state.hallIndex] ? state.data.halls[state.hallIndex].name : "");
+    return state.meal + "||" + hall + "||" + state.view;
+  }
+  function saveScrollPos() { scrollPositions.set(scrollKey(), window.scrollY); }
+  function restoreScrollPos() { window.scrollTo(0, scrollPositions.get(scrollKey()) || 0); }
+
   const VIEWS = ["stations", "categories", "nutrition"];
   VIEWS.forEach((v) => $("#seg-" + v).addEventListener("click", () => setView(v)));
   function setView(v) {
+    saveScrollPos();
     state.view = v;
     try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
     gaEvent("select_view", { view: v, meal: state.meal });
@@ -2027,6 +2045,7 @@ function foodEmoji(name) {
     if (!$("#filters-sheet").hidden) renderFiltersSheet();
     syncFilterFab();
     renderContentOnly();
+    restoreScrollPos();
   }
 
   // Swipe left/right on the content area to switch views, in the same
@@ -2064,12 +2083,15 @@ function foodEmoji(name) {
   const searchInput = $("#search");
   searchInput.addEventListener("input", () => {
     const wasSearching = !!state.query;
-    state.query = searchInput.value.trim();
+    const newQuery = searchInput.value.trim();
+    const enteringOrExiting = !!newQuery !== wasSearching;
+    if (enteringOrExiting) saveScrollPos();
+    state.query = newQuery;
     // Station filter ids are hall-qualified only while searching (a station
     // name like "Grill" exists in multiple halls) — the ids scheme changes
     // the moment search starts/stops, so a stale selection could silently
     // stop matching anything. Clear it on that transition only.
-    if (!!state.query !== wasSearching) state.stations.clear();
+    if (enteringOrExiting) state.stations.clear();
     $("#search-clear").hidden = !state.query;
     if (state.query) gaSearch(state.query);
     // Chip counts follow the search scoping (all halls); the hall row
@@ -2078,6 +2100,7 @@ function foodEmoji(name) {
     if (!$("#filters-sheet").hidden) renderFiltersSheet();
     syncFilterFab();
     renderContentOnly();
+    if (enteringOrExiting) restoreScrollPos();
   });
   $("#search-clear").addEventListener("click", () => {
     exitSearch();
