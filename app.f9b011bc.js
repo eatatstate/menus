@@ -328,7 +328,14 @@
       lightMQ.addEventListener("change", () => { if (themeSetting() === "system") applyTheme(); });
     }
     // Refresh is PWA-only: the static site has no live source to refetch.
-    if (STATIC) $("#menu-refresh").hidden = true;
+    // Hide the button AND the separator before it, otherwise two adjacent
+    // <div class="menu-sep"> render as a doubled rule.
+    if (STATIC) {
+      const refresh = $("#menu-refresh");
+      const prev = refresh.previousElementSibling;
+      if (prev && prev.classList.contains("menu-sep")) prev.hidden = true;
+      refresh.hidden = true;
+    }
     $("#menu-refresh").addEventListener("click", () => {
       closeMoreMenu();
       doFetch(state.meal, { force: true });
