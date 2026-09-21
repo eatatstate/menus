@@ -210,7 +210,6 @@
     const sv = localStorage.getItem(SORT_KEY);
     if (sv && ITEM_SORTS.some((s) => s.id === sv)) state.sort = sv;
   } catch (e) {}
-  function isLight() { return document.documentElement.classList.contains("light"); }
   // "system" (default) follows the OS; explicit "light"/"dark" wins.
   function themeSetting() {
     try { return localStorage.getItem(THEME_KEY) || "system"; } catch (e) { return "system"; }
@@ -221,18 +220,13 @@
     document.documentElement.classList.toggle("light", s === "light" || (s === "system" && lightMQ.matches));
     applyThemeMenu();
   }
-  const ICON_M = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
-  const ICON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
-  const ICON_SYS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>';
+  const THEME_IDS = ["system", "light", "dark"];
   function applyThemeMenu() {
-    const item = $("#menu-theme");
-    if (!item) return;
     const s = themeSetting();
-    const light = isLight();
-    item.querySelector(".mi-ico").innerHTML = s === "system" ? ICON_SYS : (light ? ICON_M : ICON_S);
-    item.querySelector(".mi-label").textContent = "Theme";
-    item.querySelector(".mi-state").textContent = s === "system" ? "System" : (light ? "Light" : "Dark");
-    item.title = "Theme: " + (s === "system" ? "follow system" : light ? "Light" : "Dark") + " — tap to change";
+    THEME_IDS.forEach((id) => {
+      const chip = $("#theme-" + id);
+      if (chip) chip.classList.toggle("active", id === s);
+    });
   }
 
   let toastTimer = null;
@@ -311,17 +305,17 @@
     });
     window.addEventListener("resize", () => closeMoreMenu());
 
-    $("#menu-theme").addEventListener("click", () => {
-      // Cycle System → Light → Dark → System. "system" is the default
-      // (follow the OS) until the user explicitly picks one.
-      const order = ["system", "light", "dark"];
-      const next = order[(order.indexOf(themeSetting()) + 1) % order.length];
-      try {
-        if (next === "system") localStorage.removeItem(THEME_KEY);
-        else localStorage.setItem(THEME_KEY, next);
-      } catch (e) {}
-      applyTheme();
-      closeMoreMenu();
+    // Theme chips: explicit pick, not a cycle — the active chip shows the
+    // current setting. "system" is the default (follow the OS).
+    THEME_IDS.forEach((id) => {
+      $("#theme-" + id).addEventListener("click", () => {
+        try {
+          if (id === "system") localStorage.removeItem(THEME_KEY);
+          else localStorage.setItem(THEME_KEY, id);
+        } catch (e) {}
+        applyTheme();
+        closeMoreMenu();
+      });
     });
     // Live-follow the OS while the setting is "system".
     if (lightMQ.addEventListener) {
