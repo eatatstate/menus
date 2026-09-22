@@ -399,6 +399,15 @@
     }
   }
 
+  // Pure calendar math on a YYYY-MM-DD (no timezone drift): the date n days
+  // after dateStr. Used to resolve the static "Tomorrow" chip, which is
+  // snapshot-date + 1 (not wall-clock tomorrow) since the published site can
+  // lag the real day when CI hasn't run yet.
+  function addDaysISO(dateStr, n) {
+    const p = dateStr.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  }
+
   // Date string (America/Detroit) for n days from today (n=0 → today, n=1 →
   // tomorrow). Used by the lookahead picker; n is small (≤5) so a plain ms
   // add is safe across the Detroit DST transitions in that span.
@@ -466,14 +475,27 @@
         c.appendChild(el("div", "status", "Loading menu data…"));
         await loadStatic(force);
       }
-      const found = await findMealData(meal);
+      if (seq !== undefined && seq !== reqSeq) return; // superseded
+      // The day picker works in static mode too: the snapshot job publishes
+      // today AND tomorrow, and "Tomorrow" is snapshot-date + 1 (not
+      // wall-clock tomorrow) so the pair stays consistent even when the
+      // published site lags the real day.
+      let found = null;
+      if (state.dayOffset) {
+        const tdate = addDaysISO(staticDate, state.dayOffset);
+        const d = await fetchMealFile(tdate, meal);
+        if (d) found = { date: tdate, data: d };
+      } else {
+        found = await findMealData(meal);
+      }
       if (seq !== undefined && seq !== reqSeq) return; // superseded
       if (!found) {
         const c = $("#content");
         c.innerHTML = "";
         c.appendChild(el("div", "empty",
-          staticDate ? "No " + meal + " data in the latest snapshot."
-                     : "No menu data found. Check the data branch in the repository."));
+          state.dayOffset ? "Tomorrow's " + meal + " menu isn't in the snapshot yet."
+          : staticDate ? "No " + meal + " data in the latest snapshot."
+                       : "No menu data found. Check the data branch in the repository."));
         return;
       }
       state.data = {
@@ -501,8 +523,7 @@
     if (STATIC) return fetchMenusStatic(meal, opts && opts.force, seq);
     // Live mode can look ahead: menus are published up to a week ahead, and
     // the upstream week payload carries every day in the window, so a
-    // tomorrow-date costs the same as today's. The static build only ever
-    // has today + past, hence the picker is live-only.
+    // tomorrow-date costs the same as today's.
     return fetchMenus(meal, detDateForward(state.dayOffset), seq);
   }
 
@@ -604,28 +625,29 @@
     document.title = "Eat@State - Simplified";
   }
 
-  // Day picker (live mode only): Today + Tomorrow — menus are published
-  // days ahead, and the upstream week payload carries the whole window, so
-  // viewing tomorrow costs the same as today.
+  // Day picker: Today + Tomorrow. Menus are published days ahead, so the
+  // cost is the same in live mode (the upstream week payload carries the
+  // window) and static mode (the snapshot job dumps both date dirs).
+  // "Today" = wall-clock today (live) / the newest snapshot date (static —
+  // the published site can lag the real day until CI runs); "Tomorrow" is
+  // base + 1 either way, so the two chips always form a consistent pair.
   const DAY_PICK_MAX = 1;
   function renderDayChips() {
     const seg = $("#day-seg");
     if (!seg) return;
-    if (STATIC) {
-      // Hide the button AND the separator before it, otherwise two adjacent
-      // <div class="menu-sep"> render as a doubled rule (the static build has
-      // no future dates to pick).
-      const prev = seg.previousElementSibling;
-      if (prev && prev.classList.contains("menu-sep")) prev.hidden = true;
-      seg.hidden = true;
+    seg.hidden = false;
+    const base = STATIC ? staticDate : todayStr();
+    seg.innerHTML = "";
+    if (!base) {
+      // No data date resolved yet — the chips appear once the first load
+      // lands (renderChrome runs again from render()).
       return;
     }
-    seg.hidden = false;
-    seg.innerHTML = "";
     for (let n = 0; n <= DAY_PICK_MAX; n++) {
-      const date = n === 0 ? todayStr() : detDateForward(n);
+      const date = n === 0 ? base : addDaysISO(base, 1);
       const d = new Date(date + "T12:00:00"); // local noon → date-safe
-      const label = n === 0 ? "Today" : n === 1 ? "Tomorrow"
+      const label = n === 0 ? (STATIC && base !== todayStr() ? "Latest" : "Today")
+        : n === 1 ? "Tomorrow"
         : new Intl.DateTimeFormat(undefined, { month: "numeric", day: "numeric" }).format(d);
       const b = el("button", "seg-btn" + (state.dayOffset === n ? " active" : ""));
       b.type = "button";
