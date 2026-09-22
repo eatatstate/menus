@@ -1309,6 +1309,11 @@ function foodEmoji(name) {
     { key: "carb", label: "Carbs",         unit: "g" },
     { key: "fib",  label: "Fiber",         unit: "g" },
     { key: "sug",  label: "Sugar",         unit: "g" },
+    // "of which added" — shown only when the vendor reports a real value.
+    // The vendor rounds added sugar to 0 on ~98% of items (including dishes
+    // that clearly contain it), so 0 is their "couldn't distinguish", not a
+    // zero claim; rendering "0g added sugar" on a cookie would be false.
+    { key: "asug", label: "… of which added", unit: "g", hideZero: true },
     { key: "fat",  label: "Fat",           unit: "g" },
     { key: "sat",  label: "Saturated fat", unit: "g" },
     { key: "sod",  label: "Sodium",        unit: "mg" },
@@ -1318,6 +1323,12 @@ function foodEmoji(name) {
   // otherwise the panel field.
   function nutrRowVal(item, row) {
     return row.get ? row.get(item) : nutrVal(item, row.key);
+  }
+  // Whether the row should be shown at all: value present, and (for
+  // hideZero rows) non-zero — see the added-sugar note above.
+  function nutrRowVisible(item, row) {
+    const v = nutrRowVal(item, row);
+    return v !== null && !(row.hideZero && v === 0);
   }
   // A value is present only when the vendor actually supplied it: 0 is a real
   // datum ("0 g fiber"), null/undefined means unknown and is not rendered.
@@ -1582,7 +1593,7 @@ function foodEmoji(name) {
           // "breakfast menu" tag (hidden when the "Breakfast menu also
           // served" switch is off).
           if (it.carried && hideCarried) continue;
-          if (!byStation[s.name]) { byStation[s.name] = { group: s.group, items: [] }; order.push(s.name); }
+          if (!byStation[s.name]) { byStation[s.name] = { items: [] }; order.push(s.name); }
           byStation[s.name].items.push(e);
         }
         shown += byStation[s.name] ? byStation[s.name].items.length : 0;
@@ -1609,7 +1620,6 @@ function foodEmoji(name) {
           head.appendChild(el("span", "station-group", name));
         } else {
           head.appendChild(el("span", "cat-head-label", name));
-          if (st.group) head.appendChild(el("span", "station-group", st.group));
         }
         const chev = el("span", "chev");
         chev.innerHTML = CHEV;
@@ -1937,7 +1947,7 @@ function foodEmoji(name) {
     const nut = $("#modal-nutrition");
     const nutList = $("#modal-nutrition-list");
     nutList.innerHTML = "";
-    const nutRows = NUTR_ROWS.filter((r) => nutrRowVal(it, r) !== null);
+    const nutRows = NUTR_ROWS.filter((r) => nutrRowVisible(it, r));
     if (nutRows.length) {
       nut.hidden = false;
       $("#modal-serving").textContent = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
