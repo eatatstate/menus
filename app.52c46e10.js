@@ -1313,11 +1313,21 @@ function foodEmoji(name) {
     // The vendor rounds added sugar to 0 on ~98% of items (including dishes
     // that clearly contain it), so 0 is their "couldn't distinguish", not a
     // zero claim; rendering "0g added sugar" on a cookie would be false.
-    { key: "asug", label: "… of which added", unit: "g", hideZero: true },
+    // `sub` indents the row under its parent on the label, like an FDA
+    // panel.
+    { key: "asug", label: "Added sugar", unit: "g", hideZero: true, sub: true, subCol: "left" },
     { key: "fat",  label: "Fat",           unit: "g" },
-    { key: "sat",  label: "Saturated fat", unit: "g" },
-    { key: "sod",  label: "Sodium",        unit: "mg" },
-    { key: "chol", label: "Cholesterol",   unit: "mg" },
+    // Saturated fat is a SUBSET of the total fat (the total already
+    // includes it) — indented under Fat to say so, not a second fat row.
+    { key: "sat",  label: "Saturated fat", unit: "g", sub: true, subCol: "right", hideZero: true },
+    { key: "sod",  label: "Sodium",      unit: "mg" },
+    { key: "chol", label: "Cholesterol", unit: "mg" },
+    // Minerals: the vendor's zeros are "unknown" (roast beef K=0), so these
+    // rows appear only when a real value is reported — same rule as added
+    // sugar. Non-zero coverage across a week: ~43% K, ~53% Ca, ~58% Fe.
+    { key: "pot",  label: "Potassium",   unit: "mg", hideZero: true },
+    { key: "caci", label: "Calcium",     unit: "mg", hideZero: true },
+    { key: "fe",   label: "Iron",        unit: "mg", hideZero: true },
   ];
   // Reads one display row's value: the row's own accessor when it has one,
   // otherwise the panel field.
@@ -1941,6 +1951,23 @@ function foodEmoji(name) {
       alr.hidden = false;
       for (const a of it.allergens) alrList.appendChild(el("span", "allergen-chip", a));
     } else alr.hidden = true;
+    // Dietary flags the item satisfies (same tags + order as the filter
+    // sheet: vendor icons merged with the text rules — see dietTags()).
+    // "…-free" tags are only present when judgeable, so a shorter list is
+    // informative rather than padded to 11.
+    const diets = $( "#modal-diets" );
+    const dietsList = $("#modal-diets-list");
+    dietsList.innerHTML = "";
+    const tags = dietTags(it);
+    if (tags && tags.length) {
+      diets.hidden = false;
+      for (const d of DIETS) {
+        if (tags.includes(d.id)) {
+          const c = el("span", "diet-flag-chip", d.emoji + " " + d.label);
+          dietsList.appendChild(c);
+        }
+      }
+    } else diets.hidden = true;
     // Full nutrition panel. The serving size rides in the heading because the
     // numbers are meaningless without it (a 4 oz and a 1 cup portion of the
     // same dish carry different values).
@@ -1952,8 +1979,18 @@ function foodEmoji(name) {
       nut.hidden = false;
       $("#modal-serving").textContent = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
       for (const r of nutRows) {
-        nutList.appendChild(el("dt", "nutr-k", r.label));
-        nutList.appendChild(el("dd", "nutr-v", fmtNutr(nutrRowVal(it, r), r.unit)));
+        if (r.sub) {
+          // Sub-rows (saturated fat, added sugar) are PART of the parent's
+          // value: rendered as a dimmed, indented label/value pair parked in
+          // the PARENT's own column (r.subCol), directly under it — the FDA
+          // label's "of which" treatment.
+          const c = r.subCol === "right" ? "-r" : "-l";
+          nutList.appendChild(el("dt", "nutr-k nutr-sub" + c, r.label));
+          nutList.appendChild(el("dd", "nutr-v nutr-sub" + c, fmtNutr(nutrRowVal(it, r), r.unit)));
+        } else {
+          nutList.appendChild(el("dt", "nutr-k", r.label));
+          nutList.appendChild(el("dd", "nutr-v", fmtNutr(nutrRowVal(it, r), r.unit)));
+        }
       }
     } else nut.hidden = true;
     const ing = $("#modal-ingredients");
