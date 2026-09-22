@@ -169,7 +169,7 @@
   const state = {
     data: null,          // {meal, date, fetched_at, halls:[...]}
     meal: "lunch",
-    dayOffset: 0,       // days from today (0 = today, 1..5 = lookahead); live mode only
+    dayOffset: 0,       // 0 = today, 1 = tomorrow (session-scoped; reload → today)
     date: null,
     hallIndex: 0,
     view: "categories",   // "stations" | "categories" | "nutrition"
@@ -598,14 +598,22 @@
 
   function syncMealBtn() {
     // Meal button shows the active meal + the date the data is for
-    // (compact "Lunch · Sep 16"). The full picker lives in the menu.
+    // (compact "Lunch · Sep 16"). The full picker lives in the menu. When
+    // the loaded menu is for tomorrow (wall-clock), the label says
+    // "Tomorrow" instead of the bare date — same word as the picker chip,
+    // so the future menu is obvious in the topbar without a color or badge.
+    // Keyed on the DATE (not state.dayOffset) so it's right in static mode
+    // too, where dayOffset is snapshot-relative.
     const label = $("#meal-btn-label");
     if (!label) return;
     const mealText = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
     let datePart = "";
     if (state.date) {
-      const d = new Date(state.date + "T12:00:00"); // local noon → date-safe
-      datePart = " · " + new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
+      const isTomorrow = STATIC
+        ? state.date === addDaysISO(todayStr(), 1)
+        : state.date === detDateForward(1);
+      datePart = isTomorrow ? " · Tomorrow"
+        : " · " + new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(state.date + "T12:00:00")); // local noon → date-safe
     }
     label.textContent = mealText + datePart;
     // Keep the in-menu tabs' active state + the brand date label in step.
