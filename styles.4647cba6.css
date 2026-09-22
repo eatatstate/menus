@@ -208,6 +208,9 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 /* Theme chips reuse the meal .seg/.seg-btn look; full row width in the menu. */
 .theme-seg { flex: 1 1 100%; width: 100%; }
 .theme-seg .seg-btn svg { width: 18px; height: 18px; display: block; margin: 0 auto; }
+/* Day picker (lookahead): Today + Tomorrow, full row width, same look. */
+.day-seg { flex: 1 1 100%; width: 100%; display: grid; grid-template-columns: repeat(2, 1fr); }
+.day-seg .seg-btn { padding: 7px 2px; font-variant-numeric: tabular-nums; }
 .menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
 
 /* ---------- toast ---------- */

@@ -114,7 +114,7 @@
       const p = t.replace(PLANT_DAIRY_RE, " ");
       return !MEAT_RE.test(p) && !DAIRY_RE.test(p) && !EGG_RE.test(p) && !HONEY_RE.test(p) && !GELATIN_RE.test(p);
     } },
-    { id: "nutfree",    label: "Nut-free",   emoji: "\u{1F95C}", test: (t) => !NUT_RE.test(t) },
+    { id: "nutfree",    label: "Nut-free",   emoji: "\u{1F330}", test: (t) => !NUT_RE.test(t) },
     { id: "glutenfree", label: "Gluten-free", emoji: "\u{1F35E}", test: (t) => {
       if (GLUTEN_RE.test(t)) return false;
       // An explicit gluten-free declaration clears both the oat cross-contact
@@ -133,6 +133,13 @@
     // vendor's icons on the server. The fallback never asserts them.
     { id: "soyfree",    label: "Soy-free",    emoji: "\u{1FAD8}", test: () => false, iconOnly: true },
     { id: "sesamefree", label: "Sesame-free", emoji: "\u{1F96F}", test: () => false, iconOnly: true },
+    // Peanut/fish/shellfish are safety-critical and have no reliable
+    // ingredient-text rule either (peanut hides behind "natural flavors",
+    // fish broth and shellfish paste rarely name themselves) — vendor icons
+    // only, same contract as soy/sesame.
+    { id: "peanutfree",    label: "Peanut-free",    emoji: "\u{1F95C}", test: () => false, iconOnly: true },
+    { id: "fishfree",      label: "Fish-free",      emoji: "\u{1F41F}", test: () => false, iconOnly: true },
+    { id: "shellfishfree", label: "Shellfish-free", emoji: "\u{1F980}", test: () => false, iconOnly: true },
   ];
   // Returns the diet ids an item satisfies. Prefers the server-computed
   // `item.diet` (vendor icons merged with these rules — see
@@ -162,6 +169,7 @@
   const state = {
     data: null,          // {meal, date, fetched_at, halls:[...]}
     meal: "lunch",
+    dayOffset: 0,       // days from today (0 = today, 1..5 = lookahead); live mode only
     date: null,
     hallIndex: 0,
     view: "categories",   // "stations" | "categories" | "nutrition"
@@ -391,6 +399,18 @@
     }
   }
 
+  // Date string (America/Detroit) for n days from today (n=0 → today, n=1 →
+  // tomorrow). Used by the lookahead picker; n is small (≤5) so a plain ms
+  // add is safe across the Detroit DST transitions in that span.
+  function detDateForward(n) {
+    const d = new Date(Date.now() + n * 86400000);
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Detroit" }).format(d);
+    } catch (e) {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+
   // Fetch one per-meal snapshot from data/<date>/<meal>.json; null if absent.
   async function fetchMealFile(date, meal) {
     try {
@@ -479,7 +499,11 @@
   function doFetch(meal, opts) {
     const seq = ++reqSeq;
     if (STATIC) return fetchMenusStatic(meal, opts && opts.force, seq);
-    return fetchMenus(meal, todayStr(), seq);
+    // Live mode can look ahead: menus are published up to a week ahead, and
+    // the upstream week payload carries every day in the window, so a
+    // tomorrow-date costs the same as today's. The static build only ever
+    // has today + past, hence the picker is live-only.
+    return fetchMenus(meal, detDateForward(state.dayOffset), seq);
   }
 
   async function fetchMenus(meal, date, seq) {
@@ -576,7 +600,48 @@
   function renderChrome() {
     if (state.date) $("#date-label").textContent = state.date;
     syncMealBtn();
+    renderDayChips();
     document.title = "Eat@State - Simplified";
+  }
+
+  // Day picker (live mode only): Today + Tomorrow — menus are published
+  // days ahead, and the upstream week payload carries the whole window, so
+  // viewing tomorrow costs the same as today.
+  const DAY_PICK_MAX = 1;
+  function renderDayChips() {
+    const seg = $("#day-seg");
+    if (!seg) return;
+    if (STATIC) {
+      // Hide the button AND the separator before it, otherwise two adjacent
+      // <div class="menu-sep"> render as a doubled rule (the static build has
+      // no future dates to pick).
+      const prev = seg.previousElementSibling;
+      if (prev && prev.classList.contains("menu-sep")) prev.hidden = true;
+      seg.hidden = true;
+      return;
+    }
+    seg.hidden = false;
+    seg.innerHTML = "";
+    for (let n = 0; n <= DAY_PICK_MAX; n++) {
+      const date = n === 0 ? todayStr() : detDateForward(n);
+      const d = new Date(date + "T12:00:00"); // local noon → date-safe
+      const label = n === 0 ? "Today" : n === 1 ? "Tomorrow"
+        : new Intl.DateTimeFormat(undefined, { month: "numeric", day: "numeric" }).format(d);
+      const b = el("button", "seg-btn" + (state.dayOffset === n ? " active" : ""));
+      b.type = "button";
+      b.textContent = label;
+      b.title = (n === 0 ? "Today" : n === 1 ? "Tomorrow" : "In " + n + " day" + (n > 1 ? "s" : "")) +
+        " — " + new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" }).format(d);
+      b.setAttribute("aria-pressed", String(state.dayOffset === n));
+      b.addEventListener("click", () => {
+        if (state.dayOffset === n) { closeMoreMenu(); return; }
+        state.dayOffset = n;
+        gaEvent("select_day", { day_offset: n, meal: state.meal });
+        closeMoreMenu();
+        doFetch(state.meal);
+      });
+      seg.appendChild(b);
+    }
   }
 
   function render() {
