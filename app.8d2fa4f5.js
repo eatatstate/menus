@@ -596,9 +596,10 @@
 
   /* ---------- rendering ---------- */
 
+  const MEAL_EMOJI = { breakfast: "🍳", lunch: "🥪", dinner: "🍽️" };
   function syncMealBtn() {
     // Meal button shows the active meal + the date the data is for
-    // (compact "Lunch · Sep 16"). The full picker lives in the menu. When
+    // (compact "🥪 Lunch · Sep 16"). The full picker lives in the menu. When
     // the loaded menu is for tomorrow (wall-clock), the label says
     // "Tomorrow" instead of the bare date — same word as the picker chip,
     // so the future menu is obvious in the topbar without a color or badge.
@@ -606,7 +607,7 @@
     // too, where dayOffset is snapshot-relative.
     const label = $("#meal-btn-label");
     if (!label) return;
-    const mealText = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
+    const mealText = (MEAL_EMOJI[state.meal] || "") + " " + state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
     let datePart = "";
     if (state.date) {
       const isTomorrow = STATIC
@@ -627,7 +628,7 @@
   }
 
   function renderChrome() {
-    if (state.date) $("#date-label").textContent = state.date;
+    if (state.date) $("#date-label").textContent = (MEAL_EMOJI[state.meal] || "") + " " + state.date;
     syncMealBtn();
     renderDayChips();
     document.title = "Eat@State - Simplified";
@@ -678,7 +679,7 @@
     if (!state.data) return;
     renderChrome();
     renderHallRow();
-    $("#date-label").textContent = state.date;
+    $("#date-label").textContent = (MEAL_EMOJI[state.meal] || "") + " " + state.date;
     $("#fetched-at").textContent =
       "Updated " + new Date(state.data.fetched_at).toLocaleString() + " · " + state.meal;
     renderContentOnly();
