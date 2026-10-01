@@ -237,6 +237,27 @@
     });
   }
 
+  /* ---------- hall pill alignment (left/right end of its row) ----------
+     A one-tap handedness preference: right-handed users keep the pill at
+     the right end of the sticky bar (default — thumb-reachable), lefty
+     users flip it. Persisted across sessions. */
+  const HALL_ALIGN_KEY = "eas-hall-align"; // "left" | "right"
+  function hallAlign() {
+    try {
+      const v = localStorage.getItem(HALL_ALIGN_KEY);
+      return v === "left" ? "left" : "right"; // right is the default
+    } catch (e) { return "right"; }
+  }
+  function applyHallAlign() {
+    const a = hallAlign();
+    const row = $("#hall-row");
+    if (row) row.classList.toggle("align-right", a === "right");
+    ["left", "right"].forEach((id) => {
+      const chip = $("#hall-align-" + id);
+      if (chip) chip.classList.toggle("active", id === a);
+    });
+  }
+
   let toastTimer = null;
   function showToast(msg) {
     const t = $("#toast");
@@ -325,6 +346,17 @@
         closeMoreMenu();
       });
     });
+    // Hall-position chips: same explicit-pick pattern as the theme row.
+    ["left", "right"].forEach((id) => {
+      $("#hall-align-" + id).addEventListener("click", () => {
+        try {
+          if (id === "right") localStorage.removeItem(HALL_ALIGN_KEY); // right = default
+          else localStorage.setItem(HALL_ALIGN_KEY, id);
+        } catch (e) {}
+        applyHallAlign();
+        closeMoreMenu();
+      });
+    });
     // Live-follow the OS while the setting is "system".
     if (lightMQ.addEventListener) {
       lightMQ.addEventListener("change", () => { if (themeSetting() === "system") applyTheme(); });
@@ -355,6 +387,7 @@
       openAboutModal();
     });
     applyTheme(); // align the menu label with the (pre-paint) applied theme
+    applyHallAlign();
   }
 
   /* ---------- data ---------- */
@@ -564,7 +597,8 @@
   function showError(msg) {
     state.data = null;
     closeFiltersSheet();
-    $("#hall-track").innerHTML = "";
+    const pillName = $("#hall-pill-name");
+    if (pillName) pillName.textContent = "—";
     $("#content").innerHTML = "";
     const d = el("div", "error");
     d.appendChild(el("div", null, "Could not load menus"));
@@ -687,80 +721,156 @@
     syncFilterFab();
   }
 
-  let userPickedHall = false; // set on chip click; persisted hall only applies before that
+  const RECENT_KEY = "eas-hall-recent"; // [hall names], max 3 — float to the top of the picker
+  const HINT_KEY = "eas-hall-hint";     // set once a hall is picked/swiped — hides the pill hint
+  let userPickedHall = false; // first persisted-hall restore happens only before any user pick
+  const HALL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
   function renderHallRow() {
-    const row = $("#hall-track");
-    row.innerHTML = "";
+    // Active-hall pill: one big button (the old 11-chip scroller row).
+    // Tap → hall picker sheet; swipe the content → neighbor hall.
+    const pill = $("#hall-pill");
+    if (!pill) return;
     const halls = state.data.halls;
-    // Closed halls stay in the row (dimmed, labelled) — selecting one shows
-    // a clear "closed for <meal>" message in the content area instead of
-    // silently falling back to another hall.
+    // Closed halls stay selectable (dimmed in the sheet) — selecting one
+    // shows a clear "closed for <meal>" message in the content area
+    // instead of silently falling back to another hall.
     const open = halls.map((h, i) => ({ h, i })).filter((e) => !e.h.closed);
-    if (open.length) {
-      if (!userPickedHall) {
-        // First render of this session: restore the persisted hall by name
-        // (name, not index — the index shifts when halls are closed).
-        // A persisted hall that is closed for this meal is kept as the
-        // selection: its chip shows and the content says so.
-        let saved = null;
-        try { saved = localStorage.getItem(HALL_KEY); } catch (e) {}
-        const byNameIdx = halls.findIndex((h) => h.name === saved);
-        const match = open.find((e) => e.h.name === saved);
-        // A persisted hall that is closed for this meal is kept as the
-        // selection: its chip shows and the content says so.
-        state.hallIndex = byNameIdx !== -1 ? byNameIdx : (match || open[0]).i;
-      }
-      // (No silent fallback when the selection is closed: the content area
-      // renders the closed message, and the user can tap another chip.)
+    if (open.length && !userPickedHall) {
+      // Restore the persisted hall by name — on EVERY render until the user
+      // makes an explicit pick (not just the first: hall indices shift when
+      // different halls are closed per meal, so a meal switch with a stale
+      // index must re-resolve by name). Name, not index, is the stable key.
+      let saved = null;
+      try { saved = localStorage.getItem(HALL_KEY); } catch (e) {}
+      const byNameIdx = halls.findIndex((h) => h.name === saved);
+      const match = open.find((e) => e.h.name === saved);
+      state.hallIndex = byNameIdx !== -1 ? byNameIdx : (match || open[0]).i;
     }
-    // While searching, results span every hall — the chip row is frozen
-    // (dimmed, inert) rather than hidden, so a person can still see which
-    // hall was selected before search and isn't left wondering where it
-    // went; clearing the search snaps back to that hall untouched.
+    const h = halls[state.hallIndex];
+    $("#hall-pill-name").textContent = h ? h.name + (h.closed ? " · closed" : "") : "—";
+    // While searching, results span every hall — the pill freezes (dimmed,
+    // inert) rather than hides, so a person can still see which hall was
+    // selected before search and isn't left wondering where it went.
     const searching = !!state.query;
-    row.classList.toggle("frozen", searching);
-    row.setAttribute("aria-disabled", String(searching));
-    halls.forEach((h, i) => {
-      const closed = !!h.closed;
-      const b = el("button", "hall-chip" + (i === state.hallIndex ? " active" : "") + (closed ? " closed" : ""));
-      b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(i === state.hallIndex));
-      b.textContent = h.name + (closed ? "  closed" : "");
-      b.addEventListener("click", () => {
-        if (state.query) return; // hall chips are frozen while searching
-        saveScrollPos();
-        userPickedHall = true;
-        state.hallIndex = i;
-        if (!closed) { try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {} }
-        gaEvent("select_hall", { hall: h.name, meal: state.meal, closed: closed });
-        renderHallRow();
-        if (!$("#filters-sheet").hidden) renderFiltersSheet();
-        syncFilterFab();
-        renderContentOnly();
-        restoreScrollPos();
-      });
-      row.appendChild(b);
-    });
-    // Restored (persisted) hall: center it in the horizontal scroller.
-    // Skipped once the user has clicked a chip this session. Manual
-    // scrollLeft (not scrollIntoView) so the page never scrolls vertically.
-    const activeChip = row.querySelector(".hall-chip.active");
-    if (activeChip && !userPickedHall) {
-      row.scrollLeft = activeChip.offsetLeft - (row.clientWidth - activeChip.clientWidth) / 2;
+    pill.classList.toggle("frozen", searching);
+    const hint = $("#hall-hint");
+    if (hint) {
+      let seen = false;
+      try { seen = !!localStorage.getItem(HINT_KEY); } catch (e) {}
+      hint.hidden = seen || searching;
     }
-    syncHallFades();
   }
 
-  // Hall chip row: soft edge fades signal more halls off-screen (the row's
-  // scrollbar is hidden). .at-start/.at-end on the row are updated on
-  // scroll, resize, and after each render.
-  function syncHallFades() {
-    const row = $("#hall-track");
-    const wrap = row && row.parentElement; // .hall-row
-    if (!row || !wrap) return;
-    const max = row.scrollWidth - row.clientWidth;
-    wrap.classList.toggle("at-start", max <= 0 || row.scrollLeft <= 2);
-    wrap.classList.toggle("at-end", max <= 0 || row.scrollLeft >= max - 2);
+  function hallItemCount(h) {
+    let n = 0;
+    for (const s of h.stations || []) n += (s.items || []).length;
+    return n;
+  }
+
+  function pushRecent(name) {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) {}
+    list = list.filter((x) => x !== name);
+    list.unshift(name);
+    list = list.slice(0, 3);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+
+  // Shared hall selection (pill sheet + arrow keys).
+  function selectHall(i, source) {
+    if (state.query) return; // hall picking is frozen while searching
+    const h = state.data.halls[i];
+    if (!h) return; // out of range (swipe at the edges) — no-op
+    saveScrollPos();
+    userPickedHall = true;
+    state.hallIndex = i;
+    if (!h.closed) {
+      try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {}
+      pushRecent(h.name);
+    }
+    try { localStorage.setItem(HINT_KEY, "1"); } catch (e) {}
+    gaEvent("select_hall", { hall: h.name, meal: state.meal, closed: h.closed, source });
+    renderHallRow();
+    if (!$("#hall-sheet").hidden) renderHallSheet();
+    if (!$("#filters-sheet").hidden) renderFiltersSheet();
+    syncFilterFab();
+    renderContentOnly();
+    restoreScrollPos();
+  }
+
+  /* ---------- hall picker sheet (tap the pill) ----------
+     Full-width rows instead of the old tiny chips: jump to any hall and
+     see open/closed + scale at a glance. Recent halls (max 3, persisted)
+     float to the top, since most people cycle through a couple. */
+
+  function openHallSheet() {
+    if (state.query) return; // frozen while searching
+    const m = $("#hall-sheet");
+    if (!m || !m.hidden) return;
+    gaEvent("hall_sheet_open", { view: state.view, meal: state.meal });
+    m.hidden = false;
+    document.body.style.overflow = "hidden";
+    $("#hall-pill").setAttribute("aria-expanded", "true");
+    renderHallSheet();
+  }
+  function closeHallSheet() {
+    const m = $("#hall-sheet");
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    document.body.style.overflow = "";
+    $("#hall-pill").setAttribute("aria-expanded", "false");
+  }
+  function renderHallSheet() {
+    const list = $("#hall-sheet-list");
+    if (!list || !state.data) return;
+    const halls = state.data.halls;
+    const sub = $("#hall-sheet-sub");
+    if (sub) {
+      const mealText = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
+      sub.textContent = state.date
+        ? mealText + " · " + new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(state.date + "T12:00:00"))
+        : mealText;
+    }
+    list.innerHTML = "";
+    let recents = [];
+    try { recents = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) {}
+    const recentIdx = recents
+      .map((n) => halls.findIndex((h) => h.name === n))
+      .filter((i) => i !== -1)
+      .slice(0, 3);
+    const makeOpt = (i, recent) => {
+      const h = halls[i];
+      const active = i === state.hallIndex;
+      const b = el("button", "hall-opt" + (active ? " active" : "") + (h.closed ? " closed" : ""));
+      b.setAttribute("role", "option");
+      b.setAttribute("aria-selected", String(active));
+      const ico = el("span", "hall-opt-ico");
+      ico.innerHTML = HALL_ICON;
+      const main = el("span", "hall-opt-main");
+      main.appendChild(el("span", "hall-opt-name", h.name));
+      main.appendChild(el("span", "hall-opt-meta", h.closed
+        ? "Closed for " + state.meal
+        : h.stations.length + " stations · " + hallItemCount(h) + " items"));
+      b.appendChild(ico);
+      b.appendChild(main);
+      if (recent) b.appendChild(el("span", "hall-opt-recent", "recent"));
+      const chk = el("span", "hall-opt-check");
+      chk.innerHTML = CHECK_ICON;
+      chk.hidden = !active;
+      b.appendChild(chk);
+      b.addEventListener("click", () => { closeHallSheet(); selectHall(i, "sheet"); });
+      return b;
+    };
+    if (recentIdx.length) {
+      list.appendChild(el("div", "hall-sheet-sep", "Recent"));
+      recentIdx.forEach((i) => list.appendChild(makeOpt(i, true)));
+      list.appendChild(el("div", "hall-sheet-sep", "All halls"));
+      halls.forEach((_, i) => { if (!recentIdx.includes(i)) list.appendChild(makeOpt(i, false)); });
+    } else {
+      halls.forEach((_, i) => list.appendChild(makeOpt(i, false)));
+    }
   }
 
   /* ---------- filters (FAB + bottom sheet) ----------
@@ -2194,9 +2304,12 @@ function foodEmoji(name) {
     restoreScrollPos();
   }
 
-  // Swipe left/right on the content area to switch views, in the same
-  // order the tabs are laid out (Categories, Stations, Nutrition) — not
-  // VIEWS' internal order above, which is unrelated to the visual order.
+  // Swipe left/right on the content to switch VIEW tabs (Categories,
+  // Stations, Nutrition), in the order the tabs are laid out — not VIEWS'
+  // internal order above, which is unrelated to the visual order. A
+  // mostly-horizontal gesture is required so vertical scrolling is never
+  // hijacked. (Hall switching is the pill + sheet only — a content swipe
+  // for halls kept colliding with this gesture.)
   const SWIPE_VIEWS = ["categories", "stations", "nutrition"];
   (function setupSwipe() {
     const c = $("#content");
@@ -2225,6 +2338,21 @@ function foodEmoji(name) {
       setView(SWIPE_VIEWS[next]);
     }, { passive: true });
   })();
+  // Pill: tap opens the hall picker sheet.
+  $("#hall-pill").addEventListener("click", openHallSheet);
+  $("#hall-sheet").addEventListener("click", (e) => { if (e.target.closest("[data-hall-close]")) closeHallSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHallSheet(); });
+  // Arrow keys move between halls (hallIndex is a linear row, so linear
+  // navigation is the natural fit; the pill is focusable as the target).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    if (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if (!$("#hall-sheet").hidden || !$("#filters-sheet").hidden || !$("#modal").hidden) return;
+    if (!state.data) return;
+    const next = e.key === "ArrowRight" ? state.hallIndex + 1 : state.hallIndex - 1;
+    if (next < 0 || next >= state.data.halls.length) return;
+    selectHall(next, "key");
+  });
 
   const searchInput = $("#search");
   searchInput.addEventListener("input", () => {
@@ -2319,27 +2447,6 @@ function foodEmoji(name) {
   window.addEventListener("load", syncStickbarTop);
   if (topbar && "ResizeObserver" in window) {
     new ResizeObserver(syncStickbarTop).observe(topbar);
-  }
-
-  // Horizontal-scroll a chip row with the mouse wheel (desktop); touch
-  // scrolls natively. Applied to the hall row and the category row.
-  function wheelScrollRow(row) {
-    row.addEventListener("wheel", (e) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // already horizontal
-      const max = row.scrollWidth - row.clientWidth;
-      if (max <= 0) return;
-      const atStart = row.scrollLeft <= 0 && e.deltaY < 0;
-      const atEnd = row.scrollLeft >= max && e.deltaY > 0;
-      if (atStart || atEnd) return; // let the page scroll at the edges
-      row.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }, { passive: false });
-  }
-  const hallTrack = $("#hall-track");
-  if (hallTrack) {
-    wheelScrollRow(hallTrack);
-    hallTrack.addEventListener("scroll", syncHallFades, { passive: true });
-    window.addEventListener("resize", syncHallFades);
   }
 
   // Filters FAB: opens the bottom sheet. First open marks the FAB as

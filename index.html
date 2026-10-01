@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.eb500fc3.css">
+<link rel="stylesheet" href="styles.2652456f.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -68,6 +68,11 @@
           <button class="seg-btn" id="theme-dark" type="button" aria-label="Theme: dark" title="Theme: dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
         </div>
         <div class="menu-sep"></div>
+        <div class="seg theme-seg" id="hall-align-row" role="group" aria-label="Hall position">
+          <button class="seg-btn" id="hall-align-left" type="button" aria-label="Hall pill: left" title="Show the dining-hall button at the left end of its row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="8.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+          <button class="seg-btn" id="hall-align-right" type="button" aria-label="Hall pill: right" title="Show the dining-hall button at the right end of its row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+        </div>
+        <div class="menu-sep"></div>
         <button class="menu-item" id="menu-refresh" role="menuitem">
           <span class="mi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>
           <span class="mi-label">Refresh menus</span>
@@ -99,9 +104,12 @@
 
 <div class="stickbar" id="stickbar">
 <div class="hall-row" id="hall-row">
-  <div class="hall-track" id="hall-track" role="tablist" aria-label="Dining halls"></div>
-  <span class="hall-fade left" aria-hidden="true"></span>
-  <span class="hall-fade right" aria-hidden="true"></span>
+  <button class="hall-pill" id="hall-pill" aria-haspopup="true" aria-expanded="false">
+    <span class="hall-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
+    <span class="hall-pill-name" id="hall-pill-name">—</span>
+    <span class="hall-pill-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+  </button>
+  <span class="hall-hint" id="hall-hint" aria-hidden="true">tap to pick a hall</span>
 </div>
 
 <div class="controls">
@@ -118,7 +126,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="7a0ef01" data-time="Oct 01, 2026 07:01 EDT"><span class="build-sha">7a0ef01</span></span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="c2bd28e" data-time="Oct 01, 2026 08:07 EDT"><span class="build-sha">c2bd28e</span></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -205,7 +213,17 @@
   </div>
 </div>
 
-<script src="app.8d2fa4f5.js"></script>
+<div id="hall-sheet" class="modal" hidden role="dialog" aria-modal="true" aria-label="Dining halls">
+  <div class="modal-backdrop" data-hall-close></div>
+  <div class="modal-card hall-card">
+    <button class="modal-close" data-hall-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <h2 class="hall-sheet-title">Dining hall</h2>
+    <div class="hall-sheet-sub" id="hall-sheet-sub"></div>
+    <div class="hall-sheet-list" id="hall-sheet-list" role="listbox" aria-label="Choose a dining hall"></div>
+  </div>
+</div>
+
+<script src="app.577f9865.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>
