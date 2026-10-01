@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.2652456f.css">
+<link rel="stylesheet" href="styles.edd79119.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -69,8 +69,8 @@
         </div>
         <div class="menu-sep"></div>
         <div class="seg theme-seg" id="hall-align-row" role="group" aria-label="Hall position">
-          <button class="seg-btn" id="hall-align-left" type="button" aria-label="Hall pill: left" title="Show the dining-hall button at the left end of its row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="8.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
-          <button class="seg-btn" id="hall-align-right" type="button" aria-label="Hall pill: right" title="Show the dining-hall button at the right end of its row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+          <button class="seg-btn" id="hall-align-left" type="button" aria-label="Layout: left" title="Left layout: hall select + title at the left end (left-handed)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="8.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+          <button class="seg-btn" id="hall-align-right" type="button" aria-label="Layout: right" title="Right layout: hall select + meal button at the right end (default)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
         </div>
         <div class="menu-sep"></div>
         <button class="menu-item" id="menu-refresh" role="menuitem">
@@ -96,29 +96,26 @@
       </div>
     </div>
   </div>
+  <div class="hall-row" id="hall-row">
+    <button class="hall-pill" id="hall-pill" aria-haspopup="true" aria-expanded="false">
+      <span class="hall-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
+      <span class="hall-pill-name" id="hall-pill-name">—</span>
+      <span class="hall-pill-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </button>
+    <span class="hall-hint" id="hall-hint" aria-hidden="true">tap to pick a hall</span>
+  </div>
+
+  <div class="controls">
+    <div class="seg view-seg" role="tablist" aria-label="View mode">
+      <button id="seg-categories" class="seg-btn active" role="tab" aria-selected="true">Categories</button>
+      <button id="seg-stations" class="seg-btn" role="tab" aria-selected="false">Stations</button>
+      <button id="seg-nutrition" class="seg-btn" role="tab" aria-selected="false">Nutrition</button>
+    </div>
+  </div>
 </header>
 
 <div id="offline-banner" class="offline-banner" role="alert" hidden>
   Offline — showing cached data
-</div>
-
-<div class="stickbar" id="stickbar">
-<div class="hall-row" id="hall-row">
-  <button class="hall-pill" id="hall-pill" aria-haspopup="true" aria-expanded="false">
-    <span class="hall-pill-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
-    <span class="hall-pill-name" id="hall-pill-name">—</span>
-    <span class="hall-pill-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
-  </button>
-  <span class="hall-hint" id="hall-hint" aria-hidden="true">tap to pick a hall</span>
-</div>
-
-<div class="controls">
-  <div class="seg" role="tablist" aria-label="View mode">
-    <button id="seg-categories" class="seg-btn active" role="tab" aria-selected="true">Categories</button>
-    <button id="seg-stations" class="seg-btn" role="tab" aria-selected="false">Stations</button>
-    <button id="seg-nutrition" class="seg-btn" role="tab" aria-selected="false">Nutrition</button>
-  </div>
-</div>
 </div>
 
 <main id="content" class="content" role="region" aria-label="Menu">
@@ -126,7 +123,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="1054ef8" data-time="Oct 01, 2026 18:01 EDT"><span class="build-sha">1054ef8</span></span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> <span class="build-meta" data-sha="140324f" data-time="Oct 01, 2026 19:49 EDT"><span class="build-sha">140324f</span></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -223,7 +220,7 @@
   </div>
 </div>
 
-<script src="app.577f9865.js"></script>
+<script src="app.2dc99d70.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>

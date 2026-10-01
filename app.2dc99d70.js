@@ -237,10 +237,10 @@
     });
   }
 
-  /* ---------- hall pill alignment (left/right end of its row) ----------
-     A one-tap handedness preference: right-handed users keep the pill at
-     the right end of the sticky bar (default — thumb-reachable), lefty
-     users flip it. Persisted across sessions. */
+  /* ---------- layout orientation (left/right, persisted) ----------
+     One-tap handedness preference: "left" (left-handed) mirrors the whole
+     header — hall pill to the left end AND the title row swapped (brand
+     right, meal/date left); "right" (default) is the right-handed layout. */
   const HALL_ALIGN_KEY = "eas-hall-align"; // "left" | "right"
   function hallAlign() {
     try {
@@ -252,6 +252,8 @@
     const a = hallAlign();
     const row = $("#hall-row");
     if (row) row.classList.toggle("align-right", a === "right");
+    const inner = $(".topbar-inner");
+    if (inner) inner.classList.toggle("flip", a === "left");
     ["left", "right"].forEach((id) => {
       const chip = $("#hall-align-" + id);
       if (chip) chip.classList.toggle("active", id === a);
@@ -2435,19 +2437,6 @@ function foodEmoji(name) {
   /* ---------- init ---------- */
 
   initMoreMenu();
-
-  // Keep the sticky control bar docked right below the sticky topbar
-  // (topbar height varies: safe-area inset, mobile single-row layout).
-  const topbar = $(".topbar");
-  const syncStickbarTop = () => {
-    if (topbar) document.documentElement.style.setProperty("--topbar-h", topbar.offsetHeight + "px");
-  };
-  syncStickbarTop();
-  window.addEventListener("resize", syncStickbarTop);
-  window.addEventListener("load", syncStickbarTop);
-  if (topbar && "ResizeObserver" in window) {
-    new ResizeObserver(syncStickbarTop).observe(topbar);
-  }
 
   // Filters FAB: opens the bottom sheet. First open marks the FAB as
   // "seen" so the discoverability label never comes back.
