@@ -763,6 +763,7 @@
       try { seen = !!localStorage.getItem(HINT_KEY); } catch (e) {}
       hint.hidden = seen || searching;
     }
+    renderHallStatus(); // live open/close chip on the other side of the pill
   }
 
   function hallItemCount(h) {
@@ -800,6 +801,155 @@
     syncFilterFab();
     renderContentOnly();
     restoreScrollPos();
+  }
+
+  /* ---------- live open/close status (the other side of the hall pill) ----------
+     The one at-a-glance fact that changes behavior: is it worth walking to
+     THIS hall right now. Reuses the dining-hours data (same source as the
+     hours modal; loaded once, cached offline):
+       open now            → "Open · closes 3:00 pm"
+       closed now          → "Opens 11:00 am in 1h 24m"
+       closed for the meal → that meal's slot ("Opens 4:30 pm"), not the
+                             generic building open — the hall's `closed`
+                             flag means "no menu for <meal>"
+       Tomorrow selected   → raw hours ("Monday: 7:00 am–9:00 pm")
+     Tap → the hours modal. Chip only appears once hours are resolved for
+     the current hall+day (never a fake "—"). */
+
+  const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const STATUS_TTL = 30 * 60 * 1000; // re-fetch after this; chip hides meanwhile
+  let hoursStatusCache = { at: 0, byName: {} };
+
+  function parse12h(s) {
+    const m = String(s || "").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+    if (!m) return null;
+    let h = +m[1] % 12;
+    if (m[3]) h += /pm/i.test(m[3]) ? 12 : 0;
+    return h * 60 + +m[2];
+  }
+  function fmt12h(mins) {
+    const h = Math.floor(mins / 60) % 24, m = mins % 60;
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + (m ? ":" + String(m).padStart(2, "0") : "") + " " + (h < 12 ? "am" : "pm");
+  }
+  function spanText(mins) {
+    if (mins < 60) return "in " + mins + " min";
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return m ? "in " + h + "h " + m + "m" : "in " + h + "h";
+  }
+  function dayLabelIncludes(label, weekday) {
+    const s = (label || "").toLowerCase();
+    const wd = WEEKDAY.findIndex((w) => w.toLowerCase() === weekday.toLowerCase());
+    if (wd === -1) return false;
+    if (s === weekday.toLowerCase()) return true;
+    const m = s.match(/^(.+?)\s*-\s*(.+)$/);
+    if (!m) return false;
+    const a = WEEKDAY.findIndex((w) => w.toLowerCase() === m[1].trim());
+    const b = WEEKDAY.findIndex((w) => w.toLowerCase() === m[2].trim());
+    if (a === -1 || b === -1) return false;
+    // Index comparison, NOT string: "Thursday" > "Saturday" lexicographically.
+    return a <= b ? (wd >= a && wd <= b) : (wd >= a || wd <= b);
+  }
+  function dayEntryFor(loc, weekday) {
+    let range = null;
+    for (const g of loc.hours || []) {
+      for (const day of g.days || []) {
+        const lbl = (day.days || "").trim();
+        if (lbl.toLowerCase() === weekday.toLowerCase()) return day; // exact wins
+        if (!range && dayLabelIncludes(lbl, weekday)) range = day;
+      }
+    }
+    return range;
+  }
+  // Menu hall names ≈ hours-page names but not identical ("Snyder/Phillips"
+  // vs "Snyder Phillips", "The Workshop at STEM" vs "The Workshop - STEM
+  // Teaching…"). Match on the "X at Y" parts after stripping punctuation and
+  // the word "the"; fall back to substring containment.
+  function hoursLocationFor(hallName) {
+    if (!hoursData) return null;
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/the/g, "");
+    const target = norm(hallName);
+    const locs = hoursData.sections.flatMap((s) => s.locations);
+    let hit = locs.find((l) => norm(l.name) === target);
+    if (!hit) {
+      const parts = target.split("at").map((p) => p).filter((p) => p.length >= 4);
+      if (parts.length) hit = locs.find((l) => { const n = norm(l.name); return parts.every((p) => n.includes(p)); });
+    }
+    if (!hit) hit = locs.find((l) => { const n = norm(l.name); return n.includes(target) || target.includes(n); });
+    return hit || null;
+  }
+  function hallStatusFor(hall, dateStr) {
+    const loc = hoursLocationFor(hall.name);
+    if (!loc) return null;
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d)) return null;
+    const weekday = WEEKDAY[d.getDay()];
+    const isToday = d.toDateString() === new Date().toDateString();
+    const day = dayEntryFor(loc, weekday);
+    if (!day || day.closed || !(day.slots || []).length) return { text: "Closed " + weekday, cls: "closed" };
+    if (!isToday) {
+      const opens = day.slots.map((s) => s.open || s.raw).filter(Boolean);
+      const closes = day.slots.map((s) => s.close).filter(Boolean);
+      const t = opens.length ? opens.join(" · ") + (closes.length ? "–" + closes[closes.length - 1] : "") : "—";
+      return { text: weekday + ": " + t, cls: "hours" };
+    }
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const slots = (day.slots || [])
+      .map((s) => ({ open: parse12h(s.open), close: s.close ? parse12h(s.close) : null, meals: s.meals || [] }))
+      .filter((s) => s.open != null);
+    const findMealOpen = (entry) => {
+      // `meals` is a DAY property (which meals that day serves); slots only
+      // carry open/close, so a meal's slot is found by opening-time class:
+      // breakfast opens <11am, lunch 11am–4pm, dinner ≥4pm.
+      if (!state.meal || !entry || !(entry.meals || []).includes(state.meal)) return null;
+      const [lo, hi] = state.meal === "breakfast" ? [0, 11 * 60]
+        : state.meal === "lunch" ? [11 * 60, 16 * 60]
+        : [16 * 60, 24 * 60];
+      let best = null;
+      for (const s of entry.slots || []) {
+        const o = parse12h(s.open);
+        if (o != null && o >= lo && o < hi && (best == null || o < best)) best = o;
+      }
+      return best;
+    };
+    let cur = null;
+    for (const s of slots) if (s.open <= nowMin && (s.close == null || nowMin < s.close)) { cur = s; break; }
+    if (cur) return { text: cur.close != null ? "Open · closes " + fmt12h(cur.close) : "Open", cls: "open" };
+    // Not open right now. Prefer the selected meal's next opening (a hall
+    // open for other meals but not this one — or past this meal's slot —
+    // gets the meal's time, not the building's first slot):
+    const mToday = findMealOpen(day);
+    if (mToday != null && mToday > nowMin) return { text: "Opens " + fmt12h(mToday) + " " + spanText(mToday - nowMin), cls: "closed" };
+    let next = null;
+    for (const s of slots) if (s.open > nowMin && (!next || s.open < next.open)) next = s;
+    if (next) return { text: "Opens " + fmt12h(next.open) + " " + spanText(next.open - nowMin), cls: "closed" };
+    // Nothing left today → tomorrow's meal slot, else tomorrow's first slot.
+    const tday = dayEntryFor(loc, WEEKDAY[(d.getDay() + 1) % 7]);
+    const mTom = findMealOpen(tday);
+    if (mTom != null) return { text: "Opens tomorrow " + fmt12h(mTom), cls: "closed" };
+    const first = (tday && tday.slots || []).find((s) => parse12h(s.open) != null);
+    if (first) return { text: "Opens tomorrow " + fmt12h(parse12h(first.open)), cls: "closed" };
+    return { text: "Closed for today", cls: "closed" };
+  }
+  function renderHallStatus() {
+    const chip = $("#hall-status");
+    if (!chip) return;
+    const h = state.data && state.data.halls && state.data.halls[state.hallIndex];
+    if (!h || state.query || Date.now() - hoursStatusCache.at > STATUS_TTL) {
+      chip.hidden = true;
+      return;
+    }
+    const key = h.name + "|" + state.date + "|" + state.meal;
+    let st = hoursStatusCache.byName[key];
+    if (st === undefined) st = hoursStatusCache.byName[key] = hallStatusFor(h, state.date);
+    if (!st) { chip.hidden = true; return; }
+    chip.classList.toggle("frozen", !!state.query);
+    chip.hidden = false;
+    chip.classList.toggle("open", st.cls === "open");
+    const txt = $("#hall-status-text");
+    if (txt) txt.textContent = st.text;
+    chip.setAttribute("aria-label", st.text);
   }
 
   /* ---------- hall picker sheet (tap the pill) ----------
@@ -2173,6 +2323,8 @@ function foodEmoji(name) {
         if (hoursData && hoursData.fetched_at === d.fetched_at) return; // unchanged
         hoursData = d;
         saveHoursCache(d);
+        hoursStatusCache = { at: Date.now(), byName: {} }; // fresh hours → re-resolve
+        renderHallStatus();
         if (m.hidden) return; // modal closed in the meantime
         meta.textContent = hoursMetaLine(d);
         body.innerHTML = "";
@@ -2525,6 +2677,24 @@ function foodEmoji(name) {
       b.setAttribute("aria-selected", String(x === savedView));
     });
   }
+
+  // Live status chip: tap → dining-hours modal; background-fetch hours once
+  // so the chip can show without the user opening the modal first.
+  $("#hall-status").addEventListener("click", openHoursModal);
+  (function prefetchHours() {
+    if (hoursData) { hoursStatusCache.at = Date.now(); renderHallStatus(); return; }
+    const cached = loadHoursCache();
+    if (cached) hoursData = cached;
+    fetchHours()
+      .then((d) => {
+        hoursData = d;
+        saveHoursCache(d);
+        hoursStatusCache = { at: Date.now(), byName: {} };
+        renderHallStatus();
+      })
+      .catch(() => {});
+    if (cached) { hoursStatusCache = { at: Date.now(), byName: {} }; renderHallStatus(); }
+  })();
 
   const initialMeal = defaultMeal();
   if (initialMeal !== state.meal) {

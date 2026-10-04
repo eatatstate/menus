@@ -248,12 +248,14 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
   padding: 2px 16px; /* uniform 48px header row (44px pill + 2px each side) */
   display: flex; align-items: center; gap: 10px;
 }
-/* Hall-position preference (overflow menu → Hall position, persisted):
+/* Hall-position preference (overflow menu → Layout, persisted). Layout
    right (default) pins the pill to the row's right end for right-handed
-   thumb reach — the hint label flips to the left of the pill; left
-   alignment is the plain DOM order (pill first, hint after). */
+   thumb reach; the open/close status chip takes the opposite (left) end.
+   Layout left mirrors it: pill left, status right. One auto margin per
+   layout does the pinning — no flex `order` juggling. */
 .hall-row.align-right .hall-pill { margin-left: auto; }
 .hall-row.align-right .hall-hint { order: -1; }
+.hall-row:not(.align-right) .hall-status { order: 1; margin-left: auto; }
 /* Active-hall pill: replaces the old 11-chip scroller row. Tap opens the
    hall picker sheet. Min 44px target. */
 .hall-pill {
@@ -271,6 +273,29 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 .hall-pill:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: var(--chip-active); }
 .hall-pill:active { transform: translateY(1px); }
 .hall-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Live open/close status for the selected hall — fills the empty space on
+   the OTHER side of the pill (the pill's auto margin pushes it to its end).
+   DOM order: status, then pill. Tap → dining-hours modal. Freezes (dimmed)
+   while searching, like the pill. Truncates before it crowds the pill on
+   long hall names. */
+.hall-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font: inherit; font-size: .78rem; font-weight: 600;
+  max-width: 45%; overflow: hidden; white-space: nowrap;
+  flex: 0 1 auto; min-width: 0;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.hall-status:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.hall-status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hall-status-ico { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); }
+.hall-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hall-status.frozen { opacity: .4; pointer-events: none; }
 .hall-pill-ico { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
 .hall-pill-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -469,6 +494,7 @@ html.light #filters-badge { color: #fff; }
   /* Compact sticky stack: tighter padding/gaps. */
   .hall-row { padding: 2px 12px; }
   .hall-pill { min-height: 40px; padding: 5px 10px 5px 10px; font-size: .85rem; }
+  .hall-status { min-height: 40px; padding: 5px 10px; font-size: .72rem; }
   .controls { padding: 2px 12px; gap: 6px; }
   .seg.view-seg { padding: 3px; }
   .seg.view-seg .seg-btn { min-height: 32px; padding: 5px 8px; font-size: .8rem; } /* = 40px, = pill height */
