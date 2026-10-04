@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-10-04T23:41:05Z",
+  "meals": [
+    "breakfast",
+    "lunch",
+    "dinner"
+  ],
+  "dates": [
+    "2026-10-05",
+    "2026-10-04",
+    "2026-10-03",
+    "2026-10-02",
+    "2026-10-01",
+    "2026-09-30",
+    "2026-09-29",
+    "2026-09-28"
+  ],
+  "latest_date": "2026-10-05",
+  "halls": [
+    {
+      "name": "The Edge at Akers",
+      "slug": "the-edge-at-akers"
+    },
+    {
+      "name": "Brody Square",
+      "slug": "brody-square"
+    },
+    {
+      "name": "South Pointe at Case",
+      "slug": "south-pointe-at-case"
+    },
+    {
+      "name": "The State Room at Kellogg",
+      "slug": "the-state-room-at-kellogg"
+    },
+    {
+      "name": "Heritage Commons at Landon",
+      "slug": "heritage-commons-at-landon"
+    },
+    {
+      "name": "Thrive at Owen",
+      "slug": "thrive-at-owen"
+    },
+    {
+      "name": "The Vista at Shaw",
+      "slug": "the-vista-at-shaw"
+    },
+    {
+      "name": "The Gallery at Snyder/Phillips",
+      "slug": "the-gallery-at-synderphillips"
+    },
+    {
+      "name": "The Workshop at STEM",
+      "slug": "the-workshop"
+    },
+    {
+      "name": "Nucleus at Holmes",
+      "slug": "nuclieus"
+    },
+    {
+      "name": "Sabor at the International Center",
+      "slug": "sabor-at-the-international-center"
+    }
+  ]
+}

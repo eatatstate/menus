@@ -1,0 +1,61 @@
+# Eat@State Simplified
+
+> Machine-readable menus for Michigan State University's 11 dining halls.
+> Every hall, station, and dish is published as public JSON — fetch a
+> per-meal file by date to answer "where can I get X tonight?" without a
+> browser. The interactive site at https://eatatstate.github.io/menus/ is a
+> JS app; **the JSON below is the canonical, stable data source.**
+
+The site is served from the `/menus/` subpath, so all data URLs below are
+absolute (start with `/menus/data/`).
+
+## Data endpoints
+
+- [Today's pointer](/menus/data/today.json): resolves the current Detroit date
+  and the latest available snapshot, so you never compute a date yourself.
+- [Menu index](/menus/data/index.json): every published date, meal, and hall
+  slug — the authoritative list of what is fetchable right now.
+- [Per-meal menus](/menus/data/2026-10-04/lunch.json): pattern is
+  `/menus/data/{YYYY-MM-DD}/{breakfast|lunch|dinner}.json`. One file = all 11
+  halls for one meal on one date.
+- [Dining hours](/menus/data/dining-hours.json): open/close times per hall,
+  per day-of-week, with the meals served (stable, non-dated).
+- [Schema reference](/menus/data/README.md): field-by-field layout, tag
+  vocabularies, and the `schema_version` policy.
+
+## Fetching a menu
+
+Fetch one per-meal file; no auth, no API key, CORS-open:
+
+```
+curl https://eatatstate.github.io/menus/data/2026-10-04/dinner.json
+```
+
+A file is `{ meal, date, fetched_at, schema_version, halls[] }`. Each hall has
+`name`, `slug`, `closed` (true = no menu published for this meal), and
+`stations[]`; each station has `name` and `items[]`; each item has `name`,
+`cat`, `calories`, `ingredients`, `nutr{}` (protein/carbs/fat/…), `diet[]`
+(dietary tags), and `allergens[]`. See the [schema reference](/menus/data/README.md)
+for the full field list and tag vocabularies.
+
+## How to use this data
+
+- **Cross-hall search** ("which hall has salmon tonight?"): fetch the meal file,
+  then search `items[].name` and `items[].ingredients` across all halls.
+- **Dietary filters**: `items[].diet[]` already encodes tags like
+  `vegetarian`, `vegan`, `glutenfree`, `nutfree` — no need to re-derive from
+  ingredients.
+- **Change tracking** ("what's new since yesterday?"): compare two consecutive
+  per-meal files; `items[].carried` marks a dish carried over from an earlier
+  meal on the same day.
+- **Open/closed**: a hall's `closed` flag reflects whether a menu is *published*
+  for that meal, not whether the building is physically open — for real
+  open/close times use [dining-hours.json](/menus/data/dining-hours.json).
+
+## Conventions
+
+- Dates are bucketed in **America/Detroit** (Eastern Time).
+- The static site ships the newest **7 days** of snapshots; older history stays
+  on the `data` git branch of the source repo and is not served over HTTP.
+- `schema_version` is stable; breaking changes bump it and are listed in the
+  [CHANGELOG](/menus/CHANGELOG.md).
