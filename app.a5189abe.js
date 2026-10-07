@@ -723,11 +723,12 @@
     syncFilterFab();
   }
 
-  const RECENT_KEY = "eas-hall-recent"; // [hall names], max 3 — float to the top of the picker
+  const FAV_KEY = "eas-hall-favs"; // [hall names] — user-starred, float to the top of the picker
   const HINT_KEY = "eas-hall-hint";     // set once a hall is picked/swiped — hides the pill hint
   let userPickedHall = false; // first persisted-hall restore happens only before any user pick
   const HALL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>';
   const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const STAR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 16.6l-5.2 2.75.99-5.8-4.21-4.09 5.82-.85z"/></svg>';
 
   function renderHallRow() {
     // Active-hall pill: one big button (the old 11-chip scroller row).
@@ -772,13 +773,19 @@
     return n;
   }
 
-  function pushRecent(name) {
+  // Explicit star toggle (the sheet's favorite button). Favorites persist in
+  // localStorage and float to the top of the picker; never auto-added on
+  // hall selection — a favorite is a deliberate choice.
+  function toggleFavorite(name) {
     let list = [];
-    try { list = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) {}
-    list = list.filter((x) => x !== name);
-    list.unshift(name);
-    list = list.slice(0, 3);
-    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) {}
+    try { list = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch (e) {}
+    const on = list.indexOf(name) === -1;
+    list = on ? list.concat(name) : list.filter((x) => x !== name);
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(list)); } catch (e) {}
+    gaEvent("favorite_hall", { hall: name, on });
+    // Re-render the open sheet so the section order/stars update in place.
+    if (!$("#hall-sheet").hidden) renderHallSheet();
+    return on;
   }
 
   // Shared hall selection (pill sheet + arrow keys).
@@ -791,7 +798,6 @@
     state.hallIndex = i;
     if (!h.closed) {
       try { localStorage.setItem(HALL_KEY, h.name); } catch (e) {}
-      pushRecent(h.name);
     }
     try { localStorage.setItem(HINT_KEY, "1"); } catch (e) {}
     gaEvent("select_hall", { hall: h.name, meal: state.meal, closed: h.closed, source });
@@ -986,15 +992,15 @@
         : mealText;
     }
     list.innerHTML = "";
-    let recents = [];
-    try { recents = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) {}
-    const recentIdx = recents
+    let favs = [];
+    try { favs = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch (e) {}
+    const favIdx = favs
       .map((n) => halls.findIndex((h) => h.name === n))
-      .filter((i) => i !== -1)
-      .slice(0, 3);
-    const makeOpt = (i, recent) => {
+      .filter((i) => i !== -1);
+    const makeOpt = (i) => {
       const h = halls[i];
       const active = i === state.hallIndex;
+      const fav = favIdx.includes(i);
       const b = el("button", "hall-opt" + (active ? " active" : "") + (h.closed ? " closed" : ""));
       b.setAttribute("role", "option");
       b.setAttribute("aria-selected", String(active));
@@ -1007,23 +1013,42 @@
         : h.stations.length + " stations · " + hallItemCount(h) + " items"));
       b.appendChild(ico);
       b.appendChild(main);
-      if (recent) b.appendChild(el("span", "hall-opt-recent", "recent"));
+      // Favorite star: a role=button span (NOT a real <button> — the row is
+      // itself a <button>, and HTML forbids interactive content inside it).
+      // Toggle-only: stopPropagation keeps the row from selecting the hall.
+      // Visible on every row in every section.
+      const star = el("span", "hall-opt-star" + (fav ? " on" : ""));
+      star.setAttribute("role", "button");
+      star.tabIndex = 0;
+      star.setAttribute("aria-label", (fav ? "Unfavorite " : "Favorite ") + h.name);
+      star.setAttribute("aria-pressed", String(fav));
+      star.title = fav ? "Remove from favorites" : "Add to favorites";
+      star.innerHTML = STAR_ICON;
+      const starToggle = (e) => {
+        e.stopPropagation();
+        toggleFavorite(h.name);
+      };
+      star.addEventListener("click", starToggle);
+      star.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); starToggle(e); }
+      });
       const chk = el("span", "hall-opt-check");
       chk.innerHTML = CHECK_ICON;
       chk.hidden = !active;
-      b.appendChild(chk);
+      b.appendChild(chk); // checkmark sits left of the star; star stays at the row's right end
+      b.appendChild(star);
       b.addEventListener("click", () => { closeHallSheet(); selectHall(i, "sheet"); });
       return b;
     };
-    if (recentIdx.length) {
-      list.appendChild(el("div", "hall-sheet-sep", "Recent"));
-      recentIdx.forEach((i) => list.appendChild(makeOpt(i, true)));
+    if (favIdx.length) {
+      list.appendChild(el("div", "hall-sheet-sep", "Favorites"));
+      favIdx.forEach((i) => list.appendChild(makeOpt(i)));
       list.appendChild(el("div", "hall-sheet-sep", "All halls"));
-      // Full list, recents included — the Recent section is a shortcut,
-      // not a partition: every hall stays reachable under All halls.
-      halls.forEach((_, i) => list.appendChild(makeOpt(i, false)));
+      // Full list, favorites included — the Favorites section is a
+      // shortcut, not a partition: every hall stays reachable.
+      halls.forEach((_, i) => list.appendChild(makeOpt(i)));
     } else {
-      halls.forEach((_, i) => list.appendChild(makeOpt(i, false)));
+      halls.forEach((_, i) => list.appendChild(makeOpt(i)));
     }
   }
 

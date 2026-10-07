@@ -339,7 +339,19 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
 .hall-opt-main { flex: 1 1 auto; min-width: 0; }
 .hall-opt-name { display: block; font-weight: 600; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hall-opt-meta { display: block; font-size: .74rem; color: var(--muted); margin-top: 1px; }
-.hall-opt-recent { flex: 0 0 auto; font-size: .68rem; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; }
+/* Favorite star: toggle on every hall row. Muted outline when off,
+   filled accent star when on. role=button span (the row itself is a
+   <button>), so it needs its own focus ring + hover state. */
+.hall-opt-star {
+  flex: 0 0 auto; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; cursor: pointer;
+}
+.hall-opt-star svg { width: 19px; height: 19px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; }
+.hall-opt-star:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.hall-opt-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Favorite = warm light-yellow star (reads as "marked", not as a CTA). */
+.hall-opt-star.on svg { fill: #ffd54a; stroke: #f5c518; }
 .hall-opt-check { width: 18px; height: 18px; flex: 0 0 auto; color: var(--accent); }
 .hall-sheet-sep { display: flex; align-items: center; gap: 10px; margin: 6px 2px; font-size: .68rem; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); }
 .hall-sheet-sep::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--line); }
