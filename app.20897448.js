@@ -1019,7 +1019,9 @@
       list.appendChild(el("div", "hall-sheet-sep", "Recent"));
       recentIdx.forEach((i) => list.appendChild(makeOpt(i, true)));
       list.appendChild(el("div", "hall-sheet-sep", "All halls"));
-      halls.forEach((_, i) => { if (!recentIdx.includes(i)) list.appendChild(makeOpt(i, false)); });
+      // Full list, recents included — the Recent section is a shortcut,
+      // not a partition: every hall stays reachable under All halls.
+      halls.forEach((_, i) => list.appendChild(makeOpt(i, false)));
     } else {
       halls.forEach((_, i) => list.appendChild(makeOpt(i, false)));
     }
