@@ -32,7 +32,7 @@
 <!-- llms.txt (llmstxt.org v2): advertise the LLM-readable data index so agents
      don't have to guess the path. Relative — the site is served at /menus/. -->
 <link rel="describedby" href="llms.txt" type="text/markdown">
-<link rel="stylesheet" href="styles.ab1c07b2.css">
+<link rel="stylesheet" href="styles.0e84ea66.css">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-S19196P7H7"></script>
 <script>
@@ -117,6 +117,7 @@
       <button id="seg-categories" class="seg-btn active" role="tab" aria-selected="true">Categories</button>
       <button id="seg-stations" class="seg-btn" role="tab" aria-selected="false">Stations</button>
       <button id="seg-nutrition" class="seg-btn" role="tab" aria-selected="false">Nutrition</button>
+      <button id="seg-new" class="seg-btn seg-new" role="tab" aria-selected="false" title="Specials & comebacks: today's entrees, sides, salads and desserts that are new to this week or back after being absent">Spotlight</button>
     </div>
   </div>
 </header>
@@ -130,7 +131,7 @@
 </main>
 
 <footer class="footer">
-  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> · <a href="data/README.md" target="_blank" rel="noopener">menu data</a> <span class="build-meta" data-sha="06566c2" data-time="Oct 10, 2026 13:01 EDT"><span class="build-sha">06566c2</span></span>
+  <span id="fetched-at"></span> · built upon <a href="https://eatatstate.msu.edu" target="_blank" rel="noopener">eatatstate.msu.edu</a> · <a href="data/README.md" target="_blank" rel="noopener">menu data</a> <span class="build-meta" data-sha="faf374a" data-time="Oct 10, 2026 13:12 EDT"><span class="build-sha">faf374a</span></span>
 </footer>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -193,6 +194,20 @@
   </div>
 </div>
 
+<div id="spotlight-info-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="spotlight-info-title">
+  <div class="modal-backdrop" data-spotlight-info-close></div>
+  <div class="modal-card about-card">
+    <button class="modal-close" data-spotlight-info-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <h2 id="spotlight-info-title" class="spotlight-info-title">How Spotlight works</h2>
+    <div class="spotlight-info-body">
+      <p>Spotlight compares this meal's menu against the <strong>past 7 days</strong> at this hall and shows only the interesting ones:</p>
+      <p><span class="new-tag new-tag-back">back</span>&ensp;was served earlier this week, was <strong>missing yesterday</strong>, and is back on the menu.</p>
+      <p><span class="new-tag new-tag-new">new</span>&ensp;<strong>never served</strong> at this hall in the past 7 days — a first sighting.</p>
+      <p class="spotlight-info-note">Dishes on yesterday's menu are the usual rotation and aren't listed. Carried-over breakfast items, beverages, condiments and produce are excluded; entrees, sides, salads &amp; desserts are compared.</p>
+    </div>
+  </div>
+</div>
+
 <div id="filters-fab-wrap">
   <span id="filters-hint" aria-hidden="true">Filters</span>
   <button id="filters-fab" aria-label="Filters" aria-expanded="false" aria-controls="filters-sheet" title="Filters">
@@ -227,7 +242,7 @@
   </div>
 </div>
 
-<script src="app.a5189abe.js"></script>
+<script src="app.5382815e.js"></script>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>

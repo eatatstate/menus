@@ -366,6 +366,9 @@ html.light .more-menu { box-shadow: 0 18px 40px rgba(28, 45, 38, .22), inset 0 1
    height — so the two sticky rows read as one component family. Fills the
    row: the pill row's right-weight is mirrored by a full-width tab row. */
 .seg.view-seg { flex: 1 1 auto; max-width: 100%; border-radius: 12px; background: var(--chip); }
+/* The "New" tab is the 4th in the row — slightly tighter so the four fit on
+   one line at 390px without wrapping. */
+.seg.view-seg .seg-btn.seg-new { padding: 6px 8px; font-size: .84rem; }
 .seg.view-seg .seg-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 36px; padding: 6px 10px; /* +3px seg inset +1px border = 44px, = pill height */
@@ -779,6 +782,63 @@ html.light .station { box-shadow: 0 1px 2px rgba(28, 38, 32, .10), 0 1px 3px rgb
   background: color-mix(in srgb, var(--dim) 8%, transparent);
 }
 html.light .carried-tag { border-color: #c9d4cf; background: #eef3f0; }
+/* "New"/"Today" view: per-row "new"/"back" tags (the whole view is entrees,
+   so the category badge is suppressed) + the view's header/count lines. */
+.new-tag {
+  display: inline-block;
+  font-size: .56rem; font-weight: 700;
+  letter-spacing: .4px; text-transform: uppercase;
+  border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+  vertical-align: 1px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* "back" = a familiar dish returning — keep the accent; "new" = never seen
+   this week — a warmer tint so the two buckets read apart at a glance. */
+.new-tag.new-tag-new {
+  color: #ffd54a;
+  border-color: color-mix(in srgb, #f5c518 55%, transparent);
+  background: color-mix(in srgb, #f5c518 12%, transparent);
+}
+html.light .new-tag.new-tag-new { color: #8a6d00; }
+.new-view-head {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 2px 2px 10px;
+}
+.new-view-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+.new-view-sub { font-size: .76rem; color: var(--muted); }
+/* Subtitle + "?" sit on one line (right of the title; wraps below on
+   narrow screens). */
+.new-view-headrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto;
+}
+.new-view-info {
+  flex: none; width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border-radius: 50%; cursor: pointer;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  position: relative;
+  transition: color .15s;
+}
+/* Icon is 20px but the tap target isn't — pad the hit area to ~36px
+   transparently (audit 2026-10-12, finding #2). */
+.new-view-info::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+.new-view-info svg { width: 13px; height: 13px; }
+.new-view-info:hover { color: var(--text); }
+/* "How Spotlight works" modal body. */
+.spotlight-info-title { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 0 0 8px; }
+.spotlight-info-body { font-size: .85rem; line-height: 1.55; color: var(--text); }
+.spotlight-info-body p { margin: 0 0 10px; }
+.spotlight-info-body .new-tag { margin-left: 0; margin-right: 2px; font-size: .62rem; }
+.spotlight-info-note { font-size: .76rem; color: var(--muted); margin-bottom: 0; }
 
 .cat-section {
   margin-bottom: 12px;

@@ -1082,7 +1082,15 @@
     return out;
   }
   function filterScopeEntries() {
-    const entries = rawScopeEntries();
+    let entries = rawScopeEntries();
+    // "Today" view: the scope IS the comeback/special list (not the whole
+    // hall), so the dietary chip counts and the meta line describe what the
+    // view will show. Carried/non-entree items are already excluded by
+    // todayEntries itself.
+    if (state.view === "new" && todayReady()) {
+      const halls = state.query ? state.data.halls : [state.data.halls[state.hallIndex] || state.data.halls[0]];
+      entries = todayEntries(halls) || [];
+    }
     // Carried items are hidden in EVERY view unless the switch is on —
     // the counts should say what the view will actually show. While
     // searching, the text query itself narrows the scope too (previously
@@ -1258,12 +1266,12 @@
       }));
     }
 
-    // Sort control lives in this sheet, shared by all three sortable views
-    // (Categories/Stations/Nutrition) — one preference, so switching views
-    // keeps the same ordering instead of resetting it per view. Collapse
-    // state persists across visits (unlike the per-view group section
-    // above).
-    if (state.view === "categories" || state.view === "stations" || state.view === "nutrition") {
+    // Sort control lives in this sheet, shared by all the sortable views
+    // (Categories/Stations/Nutrition/New) — one preference, so switching
+    // views keeps the same ordering instead of resetting it per view.
+    // Collapse state persists across visits (unlike the per-view group
+    // section above).
+    if (state.view === "categories" || state.view === "stations" || state.view === "nutrition" || state.view === "new") {
       body.appendChild(makeCollapsibleSection("\u2195\uFE0F Sort by", "sort", true, (sortWrap) => {
         for (const s of ITEM_SORTS) {
           const active = state.sort === s.id;
@@ -1425,6 +1433,7 @@
   function renderContentOnly() {
     if (state.view === "stations") renderStations();
     else if (state.view === "categories") renderCategories();
+    else if (state.view === "new") renderNewView();
     else renderNutrition();
     // Search scope banner: results span every hall while searching, so the
     // frozen hall row alone isn't enough — make it explicit at the top of
@@ -1772,6 +1781,103 @@ function foodEmoji(name) {
   // global search where the hall is no longer implied.
   function entryTag(e, searching) {
     return searching ? e.hall + " · " + e.station : e.station;
+  }
+
+  /* ---------- "Today" view: comebacks + specials vs the past week -------
+     A 2-day "new since yesterday" list turned out to be noise: the vendors
+     rotate entrees daily, so ~60-72% of a hall's entrees are "new" vs
+     yesterday just by being the normal menu. The genuinely unusual things
+     (a one-off special, a comeback) are better framed against the WHOLE
+     7-day window. Two buckets:
+       - "new this week"   = a hall's entree never served there in the prior
+                              7 days (a true special)
+       - "back this week"  = absent yesterday but served earlier in the week
+                              (a rotation coming back — "X is back")
+     Items present yesterday are the normal menu and are not listed.
+     Identity is (normalized hall, normalized item name) — station is
+     deliberately EXCLUDED (an item that keeps its name but moves stations
+     is not a new dish; including station caused false positives). Scope is
+     the decision-relevant categories — entree, side, salad, dessert —
+     non-carried: "other" (~1,400 condiments/produce/build-your-own) and
+     beverages churn ~10x faster and drown the signal; this scope keeps a
+     hall's list at ~10-20 items (measured). No fuzzy matching.
+     The 7 prior days are fetched on first view (each date = one cached
+     upstream week-payload / one snapshot file) and cached per meal+date. */
+  const TODAY_BASE = { key: null, hist: null }; // hist: Map<newKey, Set<date>>
+  const TODAY_WINDOW_DAYS = 7;
+  const TODAY_CATS = new Set(["entree", "side", "salad", "dessert"]);
+  function normalizeNFKC(s) { return s.normalize ? s.normalize("NFKC") : s; }
+  function normName(s) {
+    let x = String(s == null ? "" : s);
+    try { x = normalizeNFKC(x); } catch (e) {}
+    return x.replace(/\u2019|\u2018/g, "'")
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[\u00a0\u2007]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(" & ", " and ");
+  }
+  const newKey = (hall, name) => normName(hall) + "\u0000" + normName(name);
+  // One prior day's payload for the current meal; null if unpublished.
+  async function fetchDayDoc(date) {
+    if (STATIC) return fetchMealFile(date, state.meal);
+    try {
+      const res = await fetch("/api/menus?meal=" + state.meal + "&date=" + date, { cache: "no-cache" });
+      if (res.ok) {
+        const d = await res.json();
+        if (d && Array.isArray(d.halls) && d.halls.length) return d;
+      }
+    } catch (e) {}
+    return null;
+  }
+  // Load + cache the past window's entree history for the current meal.
+  async function loadTodayBaseline() {
+    if (!state.data) return;
+    const today = state.date;
+    const key = state.meal + "|" + today;
+    if (TODAY_BASE.key === key) return;
+    const days = [];
+    for (let i = 1; i <= TODAY_WINDOW_DAYS; i++) days.push(addDaysISO(today, -i));
+    const docs = await Promise.all(days.map((d) => fetchDayDoc(d)));
+    const hist = new Map();
+    docs.forEach((doc, idx) => {
+      if (!doc) return;
+      const date = days[idx];
+      for (const h of doc.halls)
+        for (const s of h.stations || [])
+          for (const it of s.items || [])
+            if (!it.carried && TODAY_CATS.has(it.cat)) {
+              const k = newKey(h.name, it.name);
+              if (!hist.has(k)) hist.set(k, new Set());
+              hist.get(k).add(date);
+            }
+    });
+    TODAY_BASE.key = key; TODAY_BASE.hist = hist;
+  }
+  function todayReady() {
+    return state.data && TODAY_BASE.key === state.meal + "|" + state.date;
+  }
+  // Today's entrees that are a comeback or a special (halls = Hall objects).
+  // Each entry carries kind: "comeback" | "special". Null while loading.
+  function todayEntries(halls) {
+    if (!todayReady()) return null;
+    const yesterday = addDaysISO(state.date, -1);
+    const hist = TODAY_BASE.hist;
+    const out = [];
+    for (const h of halls) {
+      if (h.closed || h.error) continue;
+      for (const s of h.stations || [])
+        for (const it of s.items || []) {
+        if (it.carried || !TODAY_CATS.has(it.cat)) continue;
+        const seen = hist.get(newKey(h.name, it.name));
+          if (!seen) { out.push({ item: it, hall: h.name, station: s.name, kind: "special" }); continue; }
+          if (seen.has(yesterday)) continue; // was there yesterday = normal menu
+          const earlier = Array.from(seen).some((d) => d < yesterday);
+          out.push({ item: it, hall: h.name, station: s.name, kind: earlier ? "comeback" : "special" });
+        }
+    }
+    return out;
   }
 
   // Collapsible station sections (Stations view). Expanded by default; the
@@ -2194,6 +2300,104 @@ function foodEmoji(name) {
     if (!shown) c.appendChild(el("div", "empty", filterEmptyMsg(searching)));
   }
 
+  // "Today" view: comebacks + specials for today's entrees, compared
+  // against the past week. Hall-scoped like the other views; search spans
+  // all halls. Two sections: "Back this week" (was here earlier, was gone
+  // yesterday) and "New this week" (never served at this hall in the window).
+  function renderNewView() {
+    const c = $("#content");
+    c.innerHTML = "";
+    const header = el("div", "new-view-head");
+    // Title carries the selected day's meal (the day picker flips
+    // state.dayOffset 0 = today, 1 = tomorrow).
+    const mealTitle = state.meal.charAt(0).toUpperCase() + state.meal.slice(1);
+    header.appendChild(el("span", "new-view-title", "✨ " + (state.dayOffset ? "Tomorrow's" : "Today's") + " " + mealTitle));
+    const headRow = el("span", "new-view-headrow");
+    headRow.appendChild(el("span", "new-view-sub", "dishes new or back vs. the past week"));
+    // Small "?" — opens the one-screen explanation of the tags.
+    const infoBtn = el("button", "new-view-info");
+    infoBtn.type = "button";
+    infoBtn.setAttribute("aria-label", "How Spotlight works");
+    infoBtn.title = "How Spotlight works";
+    infoBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+    infoBtn.addEventListener("click", () => openSpotlightInfo());
+    headRow.appendChild(infoBtn);
+    header.appendChild(headRow);
+    c.appendChild(header);
+    if (!todayReady()) {
+      c.appendChild(el("div", "status", "Comparing against the past week…"));
+      loadTodayBaseline().then(() => { if (state.view === "new") renderNewView(); });
+      return;
+    }
+    const q = state.query.toLowerCase();
+    const searching = !!q;
+    const hall = selectedHall(c);
+    if (!searching && !hall) return;
+    let entries = todayEntries(searching ? state.data.halls : [hall]) || [];
+    entries = entries.filter((e) => matches(q, e));
+    if (!entries.length) {
+      c.appendChild(el("div", "empty", searching ? "No specials match your search." : "No specials or comebacks at " + (hall ? hall.name : "this hall") + " today — the " + state.meal + " menu looks like the usual rotation."));
+      return;
+    }
+    // Group by station (hall+station while searching) — one card per
+    // station, its specials/comebacks listed together (tagged per row).
+    // Collapsible via the shared per-station collapse state.
+    const byStation = {};
+    const order = [];
+    for (const e of entries) {
+      const key = searching ? e.hall + "||" + e.station : e.station;
+      if (!byStation[key]) { byStation[key] = []; order.push(key); }
+      byStation[key].push(e);
+    }
+    if (state.sort !== "menu") for (const key of order) applyItemSort(byStation[key], state.sort);
+    const collapsed = stationCollapsed();
+    for (const key of order) {
+      const stList = byStation[key];
+      const stationName = key.includes("||") ? key.split("||").pop() : key;
+      const hallName = key.includes("||") ? key.split("||")[0] : hall.name;
+      const box = el("section", "station");
+      const head = el("button", "cat-head");
+      head.type = "button";
+      const isCollapsed = collapsed.has(hallName + "||" + stationName);
+      if (isCollapsed) box.classList.add("collapsed");
+      head.setAttribute("aria-expanded", String(!isCollapsed));
+      if (searching) {
+        head.appendChild(el("span", "cat-head-label", hallName));
+        head.appendChild(el("span", "station-group", stationName));
+      } else {
+        head.appendChild(el("span", "cat-head-label", stationName + "  (" + stList.length + ")"));
+      }
+      const chev = el("span", "chev");
+      chev.innerHTML = CHEV;
+      chev.setAttribute("aria-hidden", "true");
+      head.appendChild(chev);
+      box.appendChild(head);
+      const ul = el("ul", "items");
+      for (const e of stList) ul.appendChild(makeNewItemRow(e, e.kind));
+      box.appendChild(ul);
+      head.addEventListener("click", () => {
+        const nowCollapsed = box.classList.toggle("collapsed");
+        head.setAttribute("aria-expanded", String(!nowCollapsed));
+        setStationCollapsed(hallName + "||" + stationName, nowCollapsed);
+      });
+      c.appendChild(box);
+    }
+  }
+  // Row for the Today view: item with a "back"/"new" tag + its category
+  // badge (the scope is 4 categories now, so the badge is informative).
+  // The station is the section header, so there is no per-row tag for it.
+  function makeNewItemRow(e, kind) {
+    const b = el("button", "item" + (e.item.cat === "entree" ? " entree" : ""));
+    const fe = foodEmojiSpan(e.item);
+    if (fe) b.appendChild(fe);
+    b.appendChild(document.createTextNode(e.item.name));
+    b.appendChild(el("span", "new-tag " + (kind === "comeback" ? "new-tag-back" : "new-tag-new"), kind === "comeback" ? "back" : "new"));
+    if (e.item.calories) b.appendChild(el("span", "cal", Math.round(e.item.calories) + " cal"));
+    appendItemBadge(b, e.item.cat, true);
+    b.addEventListener("click", () => openModal(e));
+    return b;
+  }
+
   /* ---------- analytics (GA4, optional — no-op if gtag absent) ---------- */
 
   function gaEvent(name, params) {
@@ -2400,6 +2604,20 @@ function foodEmoji(name) {
   $("#about-modal").addEventListener("click", (e) => { if (e.target.closest("[data-about-close]")) closeAboutModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAboutModal(); });
 
+  /* ---------- spotlight info modal ---------- */
+
+  function openSpotlightInfo() {
+    gaEvent("view_spotlight_info", {});
+    $("#spotlight-info-modal").hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function closeSpotlightInfo() {
+    $("#spotlight-info-modal").hidden = true;
+    document.body.style.overflow = "";
+  }
+  $("#spotlight-info-modal").addEventListener("click", (e) => { if (e.target.closest("[data-spotlight-info-close]")) closeSpotlightInfo(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSpotlightInfo(); });
+
   function hoursMetaLine(d) {
     const n = d.sections.reduce((a, s) => a + s.locations.length, 0);
     const updated = d.fetched_at ? new Date(d.fetched_at).toLocaleDateString() : "";
@@ -2467,7 +2685,7 @@ function foodEmoji(name) {
   function saveScrollPos() { scrollPositions.set(scrollKey(), window.scrollY); }
   function restoreScrollPos() { window.scrollTo(0, scrollPositions.get(scrollKey()) || 0); }
 
-  const VIEWS = ["stations", "categories", "nutrition"];
+  const VIEWS = ["stations", "categories", "nutrition", "new"];
   VIEWS.forEach((v) => $("#seg-" + v).addEventListener("click", () => setView(v)));
   function setView(v) {
     saveScrollPos();
@@ -2491,7 +2709,7 @@ function foodEmoji(name) {
   // mostly-horizontal gesture is required so vertical scrolling is never
   // hijacked. (Hall switching is the pill + sheet only — a content swipe
   // for halls kept colliding with this gesture.)
-  const SWIPE_VIEWS = ["categories", "stations", "nutrition"];
+  const SWIPE_VIEWS = ["categories", "stations", "nutrition", "new"];
   (function setupSwipe() {
     const c = $("#content");
     if (!c) return;
@@ -2651,10 +2869,24 @@ function foodEmoji(name) {
   // scrolled × filter count), recomputed from scroll, resize, and every
   // filter change.
   let footerVisible = false;
+  // While the page is actively scrolling, fade the FAB too: floating over
+  // mid-list rows it occludes the right-aligned calories (audit 2026-10-12).
+  // Restores 400 ms after motion stops; the footer rule below is unchanged.
+  let scrolling = false;
+  let scrollTimer = null;
+  function markScrolling() {
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrolling = true;
+    syncFabAway();
+    scrollTimer = setTimeout(() => {
+      scrolling = false;
+      syncFabAway();
+    }, 400);
+  }
   function syncFabAway() {
     if (!filtersFab) return;
     filtersFab.parentElement.classList.toggle(
-      "away", footerVisible && window.scrollY > 4 && activeFilterCount() === 0
+      "away", activeFilterCount() === 0 && ((footerVisible && window.scrollY > 4) || scrolling)
     );
   }
   const footer = $(".footer");
@@ -2676,8 +2908,9 @@ function foodEmoji(name) {
     makeObs();
     window.addEventListener("resize", makeObs);
     // The IO doesn't re-fire while the footer stays intersected (short
-    // pages), but the scrollY>4 condition still needs re-checking.
-    window.addEventListener("scroll", syncFabAway, { passive: true });
+    // pages), and it says nothing about mid-list occlusion — drive the
+    // scroll-activity fade from raw scroll events instead.
+    window.addEventListener("scroll", markScrolling, { passive: true });
   }
 
   // Default meal by local time: 9:00–11:00 breakfast, 11:00–16:30 lunch,
