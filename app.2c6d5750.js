@@ -905,13 +905,18 @@
       .map((s) => ({ open: parse12h(s.open), close: s.close ? parse12h(s.close) : null, meals: s.meals || [] }))
       .filter((s) => s.open != null);
     const findMealOpen = (entry) => {
-      // `meals` is a DAY property (which meals that day serves); slots only
+      // `meals` is a DAY property (which meals that day serves — or a
+      // free-text value like "all" for non-hall locations); slots only
       // carry open/close, so a meal's slot is found by opening-time class:
-      // breakfast opens <11am, lunch 11am–4pm, dinner ≥4pm.
-      if (!state.meal || !entry || !(entry.meals || []).includes(state.meal)) return null;
+      // breakfast opens <11am, lunch 11am–3pm, dinner ≥3pm.
+      if (!state.meal || !entry) return null;
+      const emeals = entry.meals || [];
+      const mealServed = !emeals.some((m) => ["breakfast", "lunch", "dinner"].includes(m))
+        || emeals.includes(state.meal);
+      if (!mealServed) return null;
       const [lo, hi] = state.meal === "breakfast" ? [0, 11 * 60]
-        : state.meal === "lunch" ? [11 * 60, 16 * 60]
-        : [16 * 60, 24 * 60];
+        : state.meal === "lunch" ? [11 * 60, 15 * 60]
+        : [15 * 60, 24 * 60];
       let best = null;
       for (const s of entry.slots || []) {
         const o = parse12h(s.open);
@@ -2913,16 +2918,52 @@ function foodEmoji(name) {
     window.addEventListener("scroll", markScrolling, { passive: true });
   }
 
-  // Default meal by local time: 9:00–11:00 breakfast, 11:00–16:30 lunch,
-  // 16:30–21:00 dinner (3:00–4:30 is lunch per menu hours); before 9:00
-  // breakfast is the next service, after 21:00 dinner just ended.
+  // Classify a slot by its open time — the hours feed carries no per-slot
+  // meal tag: breakfast opens <11:00, lunch 11:00–15:00, dinner ≥15:00.
+  function mealForOpen(openMin) {
+    if (openMin == null) return null;
+    if (openMin < 11 * 60) return "breakfast";
+    if (openMin < 15 * 60) return "lunch";
+    return "dinner";
+  }
+  // Preferred pick: the SELECTED hall's actual hours for today — the meal
+  // of the slot containing now, else its next slot's meal today. Null when
+  // hours are unknown (first run, no cache), the hall has no hours entry,
+  // it's closed for the day, or the slot's class isn't in the day's `meals`
+  // — the caller then falls back to the time buckets.
+  function mealFromHours() {
+    if (!hoursData) return null;
+    let name = null;
+    try { name = localStorage.getItem(HALL_KEY); } catch (e) {}
+    const loc = name ? hoursLocationFor(name) : null;
+    if (!loc) return null;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const day = dayEntryFor(loc, WEEKDAY[now.getDay()]);
+    if (!day || day.closed || !(day.slots || []).length) return null;
+    const served = Array.isArray(day.meals) ? day.meals : null;
+    // `meals` holds meal names OR a free-text value ("all", "limited menu")
+    // for non-hall locations — treat "no explicit meal names" as serves-all.
+    const KNOWN_MEALS = new Set(["breakfast", "lunch", "dinner"]);
+    const servesAll = !served || !served.some((m) => KNOWN_MEALS.has(m));
+    const ok = (m) => (m && (servesAll || served.includes(m)) ? m : null);
+    const slots = (day.slots || [])
+      .map((s) => ({ open: parse12h(s.open), close: s.close ? parse12h(s.close) : null }))
+      .filter((s) => s.open != null);
+    for (const s of slots) if (s.open <= nowMin && (s.close == null || nowMin < s.close)) return ok(mealForOpen(s.open));
+    let next = null;
+    for (const s of slots) if (s.open > nowMin && (!next || s.open < next.open)) next = s;
+    return ok(mealForOpen(next ? next.open : null));
+  }
+  // Fallback meal by local time when actual hours are unknown: <11:00
+  // breakfast (before 9:00 it's the next service), 11:00–15:00 lunch,
+  // ≥15:00 dinner (dinner just ended after 21:00 — still dinner).
   function defaultMeal() {
     const d = new Date();
     const t = d.getHours() + d.getMinutes() / 60;
-    if (t >= 9 && t < 11) return "breakfast";
-    if (t >= 11 && t < 16.5) return "lunch";
-    if (t >= 16.5) return "dinner";
-    return "breakfast";
+    if (t < 11) return "breakfast";
+    if (t < 15) return "lunch";
+    return "dinner";
   }
 
   // Restore persisted view mode before the first render (HTML defaults to
@@ -2956,7 +2997,7 @@ function foodEmoji(name) {
     if (cached) { hoursStatusCache = { at: Date.now(), byName: {} }; renderHallStatus(); }
   })();
 
-  const initialMeal = defaultMeal();
+  const initialMeal = mealFromHours() || defaultMeal();
   if (initialMeal !== state.meal) {
     setMeal(initialMeal);
   } else {
