@@ -2568,15 +2568,29 @@ function foodEmoji(name) {
     return lines.length ? lines : [""];
   }
 
+  // Persistent offscreen canvas used for text measurement (one getContext
+  // for the whole card, not one per measure call).
+  const measure = document.createElement("canvas").getContext("2d");
+  // measure a string width at a given font.
+  function mtext(font, txt) { measure.font = font; return measure.measureText(txt).width; }
+  // wrap a string to maxW at a given font (uses the shared measure ctx).
+  function mwrap(font, txt, maxW) { measure.font = font; return wrapText(measure, txt, maxW); }
+
   // Draw the open dish as a PNG that mirrors the on-screen sheet. SYNC,
   // returns a dataURL ("" on any failure — the share then goes text-only).
+  // The vertical metrics below are taken from the live DOM (getBoundingClientRect
+  // of each .modal-card child), so the card matches the sheet section-for-
+  // section: badge row, title (emoji + name), calories meta, then the
+  // border-top sections Nutrition / Ingredients / Dietary, each with its own
+  // uppercase heading. No extra chrome (the "via Eat@State" footer is the
+  // only addition, kept small at the very bottom).
   function drawShareCard(entry) {
     try {
       const it = entry.item;
       const light = document.documentElement.classList.contains("light");
       const T = light
-        ? { bg: "#f5f7f5", panel: "#eef2ef", line: "#dbe3dd", text: "#1c2620", muted: "#5a6e65", dim: "#5f7168", accent: "#0f7a58", accent2: "#7d5805" }
-        : { bg: "#0d1512", panel: "#18241f", line: "#24322c", text: "#e8f0ec", muted: "#8fa39b", dim: "#74877e", accent: "#35c28f", accent2: "#ffd166" };
+        ? { panel: "#eef2ef", line: "#dbe3dd", text: "#1c2620", muted: "#5a6e65", dim: "#5f7168", accent: "#0f7a58", accent2: "#7d5805" }
+        : { panel: "#18241f", line: "#24322c", text: "#e8f0ec", muted: "#8fa39b", dim: "#74877e", accent: "#35c28f", accent2: "#ffd166" };
       const BADGE = {
         entree: light ? ["#8c2b20", "#f8e1dd"] : ["#ffb3ab", "#3a1e1a"],
         side: light ? ["#155e8c", "#dcedf9"] : ["#9ad4ff", "#17283a"],
@@ -2589,215 +2603,218 @@ function foodEmoji(name) {
       const DISP = "'Space Grotesk', Manrope, -apple-system, sans-serif";
       const W = 560, PAD = 20, MAXW = W - PAD * 2;
 
-      const c = document.createElement("canvas").getContext("2d");
-      // --- measure everything first so the canvas can be sized exactly ---
+      // ---- data (mirrors openModal) ----
       const badge = (it.cat || "").toUpperCase();
       const badgeCol = badge ? BADGE[it.cat] : [T.muted, light ? "#d9e4dd" : "#2c443a"];
-      c.font = "700 11px " + SANS;
-      const badgeW = c.measureText(badge).width + badge.length * 0.5 + 12;
-      c.font = "400 12px " + SANS;
-      const hallW = c.measureText(entry.hall + " \u00b7 " + entry.station).width;
-      const badgeRowH = Math.max(20, badgeW, 16) + 8;
-
-      c.font = "700 23px " + DISP;
+      const hall = entry.hall + " \u00b7 " + entry.station;
       const title = it.name;
-      let titleLines = wrapText(c, title, MAXW - 46);
-      if (titleLines.length > 2) { // ellipsize a 2nd+ line
-        let t = titleLines[1];
-        while (c.measureText(t + "\u2026").width > MAXW - 46 && t.length) t = t.slice(0, -1);
-        titleLines = [titleLines[0], t + "\u2026"];
-      }
-      const titleH = titleLines.length * 28;
-
       const metaBits = [];
       if (it.calories) metaBits.push(Math.round(it.calories) + " calories");
       if (it.carried && state.meal !== "breakfast") metaBits.push("breakfast menu");
-      c.font = "400 13px " + SANS;
-      const metaH = metaBits.length ? c.measureText(metaBits.join(" \u00b7 ")).width ? 18 : 18 : 0;
-      const descH = it.desc ? wrapText(c, it.desc, MAXW).length * 20 + 4 : 0;
-
-      const chipW = (label) => { c.font = "600 12px " + SANS; return c.measureText(label).width + 20; };
-      const allergenLabels = (it.allergens || []).filter(Boolean);
+      const meta = metaBits.join(" \u00b7 ");
+      const desc = it.desc || "";
+      const allergens = (it.allergens || []).filter(Boolean);
       const dietTagsArr = dietTags(it) || [];
-      const dietLabels = DIETS.filter((d) => dietTagsArr.includes(d.id)).map((d) => d.emoji + " " + d.label);
-      const chipsH = (labels) => {
-        let y = 0, x = 0;
-        for (const l of labels) { const w = chipW(l); if (x + w > MAXW) { y += 30; x = 0; } x += w + 6; }
-        return labels.length ? 8 + y + 24 : 0;
-      };
-      const allH = allergenLabels.length ? 14 + 18 + chipsH(allergenLabels) : 0;
-      const dietH = dietLabels.length ? 14 + 18 + chipsH(dietLabels) : 0;
-
+      const diets = DIETS.filter((d) => dietTagsArr.includes(d.id)).map((d) => d.emoji + " " + d.label);
       const nutRows = NUTR_ROWS.filter((r) => nutrRowVisible(it, r));
-      let nutH = 0;
-      if (nutRows.length) {
-        nutH = 14 + 18;
-        const main = nutRows.filter((r) => !r.sub);
-        const subL = nutRows.filter((r) => r.sub && r.subCol === "left");
-        const subR = nutRows.filter((r) => r.sub && r.subCol === "right");
-        const cols = [];
-        for (let i = 0; i < main.length; i += 2) cols.push([main[i], main[i + 1] || null]);
-        for (let i = 0; i < cols.length; i++) {
-          const a = cols[i][0];
-          let rh = 22;
-          if (i < subL.length) rh += 18;
-          if (a.subCol === "right" && i < subR.length) rh += 18;
-          nutH += rh;
+      const serving = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
+      const ingredients = it.ingredients || "";
+
+      // ---- fonts (match the sheet's computed px) ----
+      const F = {
+        badge: "700 10px " + SANS,
+        hall: "400 12px " + SANS,
+        emoji: "37px " + SANS,
+        title: "700 23px " + DISP,
+        meta: "400 13px " + SANS,
+        desc: "400 15px " + SANS,
+        h3: "700 12px " + SANS,
+        serving: "500 12px " + SANS,
+        dt: "400 13px " + SANS,
+        dv: "600 13px " + SANS,
+        sub: "400 12px " + SANS,
+        subv: "500 12px " + SANS,
+        ing: "400 13px " + SANS,
+        chip: "600 12px " + SANS,
+        foot: "400 11px " + SANS,
+      };
+      const mc = (font, txt) => mtext(font, txt);
+
+      // ---- nutrition grid: pair mains, insert of-which sub-rows after parent ----
+      const SUB_PARENT = { asug: "sug", sat: "fat" };
+      const mains = nutRows.filter((r) => !r.sub);
+      const subs = nutRows.filter((r) => r.sub);
+      const gridRows = [];
+      for (let i = 0; i < mains.length; i += 2) {
+        const l = mains[i], r = mains[i + 1] || null;
+        gridRows.push({ type: "main", l, r });
+        for (const s of subs) {
+          if (SUB_PARENT[s.key] === l.key) gridRows.push({ type: "sub", side: "left", row: s });
+          if (r && SUB_PARENT[s.key] === r.key) gridRows.push({ type: "sub", side: "right", row: s });
         }
       }
-      const ingLines = it.ingredients ? wrapText(c, it.ingredients, MAXW) : [];
-      const ingH = ingLines.length ? 14 + 18 + ingLines.length * 19 : 0;
 
-      const footH = 40;
-      const H = PAD + 6 + badgeRowH + titleH + (metaH ? 22 : 0) + descH + allH + nutH + ingH + dietH + footH + PAD;
+      // ---- chip row count (for height) ----
+      const chipRows = (labels) => {
+        let rows = 1, x = 0;
+        for (const l of labels) { const w = mc(F.chip, l) + 20; if (x + w > MAXW) { rows++; x = 0; } x += w + 6; }
+        return labels.length ? rows : 0;
+      };
+      const ingLines = ingredients ? mwrap(F.ing, ingredients, MAXW) : [];
+      const descLines = desc ? mwrap(F.desc, desc, MAXW) : [];
+      const titleLines = mwrap(F.title, title, MAXW - (foodEmoji(it.name) ? 54 : 0));
+
+      // ---- vertical layout (y cursor) — 2 pass: measure H, then draw ----
+      const layout = () => {
+        let y = 23;                       // badge row top (DOM y=23)
+        const badgeRowH = 17;
+        y += badgeRowH;                   // -> 40
+        y = Math.max(y, 48);              // title top (DOM y=48)
+        const titleH = Math.max(48, titleLines.length * 28);
+        y = 48 + titleH; y += 4;          // h2 margin-bottom
+        const hasMeta = !!meta;
+        if (hasMeta) { const metaY = y; y += 18; }   // meta h=18 (DOM y=100)
+        y += hasMeta ? 4 : 0;             // to section margin
+        const sections = [];
+        const sec = (label, servingText, bodyH) => {
+          y += 14;                        // section margin-top
+          const borderY = y;
+          y += 12;                        // padding-top
+          const h3Y = y; y += 17;         // h3 h=17
+          y += 8;                         // h3 margin-bottom
+          const bodyY = y;
+          y += bodyH;
+          sections.push({ label, servingText, borderY, h3Y, bodyY });
+        };
+        // Nutrition
+        if (nutRows.length) {
+          let bodyH = 0;
+          for (const gr of gridRows) bodyH += gr.type === "main" ? 24 : 21;
+          sec("Nutrition", serving, bodyH);
+        }
+        // Ingredients
+        if (ingredients) {
+          const bodyH = ingLines.length * 20;
+          sec("Ingredients", "", bodyH);
+        }
+        // Dietary
+        if (diets.length) {
+          const bodyH = chipRows(diets) * 26 + (chipRows(diets) - 1) * 6;
+          sec("Dietary", "", bodyH);
+        }
+        y += 14;                          // footer gap
+        const footY = y;
+        y += 14;
+        y += 22;                          // card bottom padding
+        return { H: y, badgeY: 23, titleY: 48, titleH, metaY: (hasMeta ? 48 + titleH + 4 : 0), sections, footY };
+      };
+
+      const L = layout();
       const SCALE = 2;
-
       const canvas = document.createElement("canvas");
-      canvas.width = W * SCALE; canvas.height = H * SCALE;
+      canvas.width = W * SCALE; canvas.height = Math.max(1, Math.round(L.H)) * SCALE;
       const ctx = canvas.getContext("2d");
       ctx.scale(SCALE, SCALE);
       ctx.textBaseline = "alphabetic";
 
       // card
-      ctx.fillStyle = T.panel; ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = T.line; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+      ctx.fillStyle = T.panel; ctx.fillRect(0, 0, W, L.H);
+      ctx.strokeStyle = T.line; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W - 1, L.H - 1);
 
-      let y = PAD + 6;
-      // category badge + hall·station
-      c.font = "700 11px " + SANS;
-      ctx.font = "700 11px " + SANS;
+      // badge + hall·station
       if (badge) {
-        ctx.fillStyle = badgeCol[1]; rr(ctx, PAD, y, badgeW, 18, 4); ctx.fill();
-        ctx.fillStyle = badgeCol[0];
+        const bw = mc(F.badge, badge) + badge.length * 0.5 + 12;
+        ctx.fillStyle = badgeCol[1]; rr(ctx, PAD, L.badgeY, bw, 16, 4); ctx.fill();
+        ctx.fillStyle = badgeCol[0]; ctx.font = F.badge;
         let bx = PAD + 6;
-        for (const ch of badge) { ctx.fillText(ch, bx, y + 13); bx += ctx.measureText(ch).width + 0.5; }
+        for (const ch of badge) { ctx.fillText(ch, bx, L.badgeY + 12); bx += ctx.measureText(ch).width + 0.5; }
+        ctx.font = F.hall; ctx.fillStyle = T.dim;
+        ctx.fillText(hall, PAD + bw + 8, L.badgeY + 12);
+      } else {
+        ctx.font = F.hall; ctx.fillStyle = T.dim; ctx.fillText(hall, PAD, L.badgeY + 12);
       }
-      const tagX = PAD + (badge ? badgeW + 8 : 0);
-      ctx.font = "400 12px " + SANS;
-      ctx.fillStyle = T.dim;
-      ctx.fillText(entry.hall + " \u00b7 " + entry.station, tagX, y + 13);
-      y += badgeRowH;
 
-      // title (big emoji + name)
+      // title (emoji + name)
       const e = foodEmoji(it.name);
-      if (e) { ctx.font = "37px " + SANS; ctx.fillStyle = T.text; ctx.fillText(e, PAD, y + 22); }
-      ctx.font = "700 23px " + DISP;
-      ctx.fillStyle = T.text;
-      let ty = y + 22;
-      const tx = PAD + (e ? 46 : 0);
+      let ty = L.titleY + 30;             // baseline for first line
+      if (e) { ctx.font = F.emoji; ctx.fillStyle = T.text; ctx.fillText(e, PAD, ty); }
+      ctx.font = F.title; ctx.fillStyle = T.text;
+      const tx = PAD + (e ? 54 : 0);
       for (const ln of titleLines) { ctx.fillText(ln, tx, ty); ty += 28; }
-      y = ty - 28 + 6;
 
       // meta (calories · breakfast menu)
-      if (metaBits.length) {
-        ctx.font = "400 13px " + SANS;
-        ctx.fillStyle = T.muted;
-        ctx.fillText(metaBits.join(" \u00b7 "), PAD, y + 13);
-        y += 22;
-      }
+      if (meta) { ctx.font = F.meta; ctx.fillStyle = T.muted; ctx.fillText(meta, PAD, L.metaY + 13); }
+
       // description
-      if (it.desc) {
-        ctx.font = "400 15px " + SANS;
-        ctx.fillStyle = T.text;
-        let dy = y + 15;
-        for (const ln of wrapText(ctx, it.desc, MAXW)) { ctx.fillText(ln, PAD, dy); dy += 20; }
-        y += descH;
+      if (desc) {
+        ctx.font = F.desc; ctx.fillStyle = T.text;
+        let dy = L.metaY + 18 + 15;
+        for (const ln of descLines) { ctx.fillText(ln, PAD, dy); dy += 24; }
       }
-      // section heading helper (returns the y after the heading)
-      const section = (label, serving) => {
-        y += 14;
+
+      // sections
+      for (const s of L.sections) {
         ctx.strokeStyle = T.line; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
-        y += 12;
-        ctx.font = "400 12px " + SANS;
-        ctx.fillStyle = T.muted;
-        ctx.fillText(label.toUpperCase(), PAD, y + 12);
-        if (serving) {
-          const lw = ctx.measureText(label.toUpperCase()).width;
-          ctx.fillText(serving, PAD + lw + 6, y + 12);
+        ctx.beginPath(); ctx.moveTo(PAD, s.borderY + 0.5); ctx.lineTo(W - PAD, s.borderY + 0.5); ctx.stroke();
+        ctx.font = F.h3; ctx.fillStyle = T.muted;
+        ctx.fillText(s.label.toUpperCase(), PAD, s.h3Y + 12);
+        if (s.servingText) {
+          const lw = ctx.measureText(s.label.toUpperCase()).width;
+          ctx.font = F.serving; ctx.fillStyle = T.muted;
+          ctx.fillText(s.servingText, PAD + lw + 6, s.h3Y + 12);
         }
-        y += 18;
-        return y;
-      };
-      // chip helper
-      const chips = (labels, color, bg, border) => {
-        let x = PAD;
-        for (const l of labels) {
-          ctx.font = "600 12px " + SANS;
-          const w = c.measureText(l).width + 20;
-          if (x + w > W - PAD) { x = PAD; y += 30; }
-          ctx.fillStyle = bg; rr(ctx, x, y - 4, w, 24, 10); ctx.fill();
-          ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
-          ctx.fillStyle = color; ctx.fillText(l, x + 10, y + 12);
-          x += w + 6;
-        }
-      };
-      // allergens
-      if (allergenLabels.length) {
-        const a2 = hexA(T.accent2, light ? 0.14 : 0.12);
-        section("Contains");
-        chips(allergenLabels, T.accent2, a2, hexA(T.accent2, light ? 0.4 : 0.34));
-        y += 24;
-      }
-      // nutrition
-      if (nutRows.length) {
-        const serving = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
-        section("Nutrition", serving);
-        const leftX = PAD, leftW = (MAXW - 14) / 2, rightX = PAD + leftW + 14, rightW = leftW;
-        const main = nutRows.filter((r) => !r.sub);
-        const subL = nutRows.filter((r) => r.sub && r.subCol === "left");
-        const subR = nutRows.filter((r) => r.sub && r.subCol === "right");
-        for (let i = 0; i < main.length; i += 2) {
-          const a = main[i], b = main[i + 1] || null;
-          const drawRow = (r, x, rightAligned) => {
-            ctx.font = "400 12px " + SANS;
-            ctx.fillStyle = T.muted; ctx.textAlign = "left";
-            ctx.fillText(r.label, x, y + 13);
-            ctx.font = "600 12px " + SANS;
-            ctx.fillStyle = T.text; ctx.textAlign = rightAligned ? "right" : "left";
-            const vx = rightAligned ? x + leftW : x;
-            ctx.fillText(fmtNutr(nutrRowVal(it, r), r.unit), vx, y + 13);
-            ctx.textAlign = "left";
-          };
-          drawRow(a, leftX, true);
-          if (b) drawRow(b, rightX, true);
-          y += 22;
-          const subFor = (r, side) => {
-            const arr = side === "left" ? subL : subR;
-            ctx.font = "400 11px " + SANS;
-            ctx.fillStyle = T.muted; ctx.textAlign = "left";
-            ctx.fillText("\u2013 " + r.label, (side === "left" ? leftX : rightX) + 10, y + 12);
-            ctx.font = "500 11px " + SANS;
-            ctx.fillStyle = T.muted; ctx.textAlign = "right";
-            ctx.fillText(fmtNutr(nutrRowVal(it, r), r.unit), (side === "left" ? leftX : rightX) + leftW, y + 12);
-            ctx.textAlign = "left";
-            y += 18;
-          };
-          if (i < subL.length) subFor(subL[i], "left");
-          if (a.subCol === "right" && i < subR.length) subFor(subR[i], "right");
+        // body
+        if (s.label === "Nutrition") {
+          const gridLeft = PAD, gridRight = W - PAD, colGap = 14;
+          const colW = (gridRight - gridLeft - colGap) / 2;
+          const leftColRight = gridLeft + colW, rightColLeft = gridLeft + colW + colGap;
+          let y = s.bodyY;
+          for (const gr of gridRows) {
+            if (gr.type === "main") {
+              const drawCell = (row, labelX, valRight) => {
+                if (!row) return;
+                ctx.font = F.dt; ctx.fillStyle = T.muted; ctx.textAlign = "left";
+                ctx.fillText(row.label, labelX, y + 15);
+                ctx.font = F.dv; ctx.fillStyle = T.text; ctx.textAlign = "right";
+                ctx.fillText(fmtNutr(nutrRowVal(it, row), row.unit), valRight, y + 15);
+                ctx.textAlign = "left";
+              };
+              drawCell(gr.l, gridLeft, leftColRight);
+              drawCell(gr.r, rightColLeft, gridRight);
+              y += 24;
+            } else {
+              const labelX = gr.side === "left" ? gridLeft + 10 : rightColLeft + 10;
+              const valRight = gr.side === "left" ? leftColRight : gridRight;
+              ctx.font = F.sub; ctx.fillStyle = T.muted; ctx.textAlign = "left";
+              ctx.fillText("\u2013 " + gr.row.label, labelX, y + 14);
+              ctx.font = F.subv; ctx.fillStyle = T.muted; ctx.textAlign = "right";
+              ctx.fillText(fmtNutr(nutrRowVal(it, gr.row), gr.row.unit), valRight, y + 14);
+              ctx.textAlign = "left";
+              y += 21;
+            }
+          }
+        } else if (s.label === "Ingredients") {
+          ctx.font = F.ing; ctx.fillStyle = T.muted;
+          let iy = s.bodyY + 15;
+          for (const ln of ingLines) { ctx.fillText(ln, PAD, iy); iy += 20; }
+        } else if (s.label === "Dietary") {
+          const g2 = hexA(T.accent, 0.12), gb = hexA(T.accent, 0.34);
+          let x = PAD, cy = s.bodyY;
+          for (const l of diets) {
+            ctx.font = F.chip;
+            const w = mc(F.chip, l) + 20;
+            if (x + w > W - PAD) { x = PAD; cy += 32; }
+            ctx.fillStyle = g2; rr(ctx, x, cy, w, 26, 10); ctx.fill();
+            ctx.strokeStyle = gb; ctx.lineWidth = 1; ctx.stroke();
+            ctx.fillStyle = T.accent; ctx.fillText(l, x + 10, cy + 17);
+            x += w + 6;
+          }
         }
       }
-      // ingredients
-      if (ingLines.length) {
-        section("Ingredients");
-        ctx.font = "400 12px " + SANS;
-        ctx.fillStyle = T.muted;
-        let iy = y + 12;
-        for (const ln of ingLines) { ctx.fillText(ln, PAD, iy); iy += 19; }
-        y += ingH - 14 - 18;
-      }
-      // dietary flags
-      if (dietLabels.length) {
-        const g2 = hexA(T.accent, light ? 0.14 : 0.12);
-        section("Dietary");
-        chips(dietLabels, T.accent, g2, hexA(T.accent, light ? 0.4 : 0.34));
-        y += 24;
-      }
-      // footer: via Eat@State + date
-      y += 14;
-      ctx.font = "400 11px " + SANS;
-      ctx.fillStyle = T.dim;
-      ctx.fillText("via Eat@State" + (state.date ? " \u00b7 " + state.date : ""), PAD, y + 10);
+
+      // footer
+      ctx.font = F.foot; ctx.fillStyle = T.dim;
+      ctx.fillText("via Eat@State" + (state.date ? " \u00b7 " + state.date : ""), PAD, L.footY + 10);
 
       return canvas.toDataURL("image/png");
     } catch (err) {
