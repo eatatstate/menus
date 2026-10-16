@@ -2427,6 +2427,7 @@ function foodEmoji(name) {
     });
     const m = $("#modal");
     const it = entry.item;
+    openModalEntry = entry;
     const mt = $("#modal-title");
     mt.textContent = "";
     const fe = foodEmojiSpan(it);
@@ -2508,6 +2509,40 @@ function foodEmoji(name) {
   }
   $("#modal").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  // Share the open dish: native Web Share sheet (text + app link) when
+  // available, else copy the link. The menu is date-scoped, so the text
+  // carries hall, station, calories, and the date the dish was seen.
+  let openModalEntry = null;
+  $("#modal-share").addEventListener("click", async () => {
+    const entry = openModalEntry;
+    if (!entry) return;
+    closeModal(); // one sheet at a time — the OS share sheet takes over
+    const it = entry.item;
+    const e = foodEmoji(it.name);
+    const title = (e ? e + " " : "") + it.name;
+    const bits = [it.name + " — " + entry.hall + ", " + entry.station];
+    if (it.calories) bits.push(Math.round(it.calories) + " cal");
+    if (state.date) bits.push(state.date);
+    const text = bits.join(" · ");
+    const url = location.origin + location.pathname;
+    if (navigator.share) {
+      gaEvent("share", { share_target: "dish", share_method: "native", item_name: it.name });
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // dismissed — nothing to do
+      }
+    }
+    gaEvent("share", { share_target: "dish", share_method: "copy", item_name: it.name });
+    try {
+      await navigator.clipboard.writeText(text + " " + url);
+      showToast("Link copied");
+    } catch (err) {
+      window.prompt("Copy this:", text + " " + url);
+    }
+  });
 
   /* ---------- dining hours modal ---------- */
 
