@@ -558,8 +558,9 @@
     if (STATIC) return fetchMenusStatic(meal, opts && opts.force, seq);
     // Live mode can look ahead: menus are published up to a week ahead, and
     // the upstream week payload carries every day in the window, so a
-    // tomorrow-date costs the same as today's.
-    return fetchMenus(meal, detDateForward(state.dayOffset), seq);
+    // tomorrow-date costs the same as today's. opts.date (deep link) wins
+    // over the day-offset so a shared date loads exactly that date.
+    return fetchMenus(meal, (opts && opts.date) || detDateForward(state.dayOffset), seq);
   }
 
   async function fetchMenus(meal, date, seq) {
@@ -2510,10 +2511,177 @@ function foodEmoji(name) {
   $("#modal").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
-  // Share the open dish: native Web Share sheet (text + app link) when
-  // available, else copy the link. The menu is date-scoped, so the text
-  // carries hall, station, calories, and the date the dish was seen.
+  // Share the open dish: a rendered PNG card (the image gives instant
+  // context — link previews are unreliable and the app is an SPA) plus the
+  // text + app link for the live data. Native Web Share with files when the
+  // platform supports it; copy fallback otherwise.
   let openModalEntry = null;
+
+  // Canonical share URL: the public GitHub Pages site, not the origin
+  // (dev/tailnet origins like 127.0.0.1:7090 aren't shareable).
+  function siteUrl() {
+    return location.hostname.endsWith("github.io")
+      ? location.origin + location.pathname
+      : "https://eatatstate.github.io/menus/";
+  }
+
+  // Draw the dish as a PNG card matching the app theme. Returns a Promise
+  // of a File, or null if rendering isn't possible (headless canvas, etc.).
+  function dishShareCard(entry) {
+    const it = entry.item;
+    const light = document.documentElement.classList.contains("light");
+    const C = light ? {
+      bg: "#f5f7f5", line: "#dbe3dd", text: "#1c2620", muted: "#5a6e65", dim: "#5f7168", accent: "#0f7a58",
+    } : {
+      bg: "#0d1512", line: "#24322c", text: "#e8f0ec", muted: "#8fa39b", dim: "#74877e", accent: "#35c28f",
+    };
+    const FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    const DISPLAY = "'Space Grotesk', " + FONT;
+    const W = 600, PAD = 36;
+    try {
+      // Headline stats: real-valued, non-sub rows (cal is shown separately).
+      const stats = NUTR_ROWS
+        .filter((r) => !r.sub && r.key !== "cal" && nutrRowVisible(it, r))
+        .slice(0, 6);
+      const cal = nutrRowVal(it, NUTR_ROWS[0]);
+      const emoji = foodEmoji(it.name);
+      const serving = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
+      const dateLine = state.date
+        ? new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" })
+            .format(new Date(state.date + "T12:00:00"))
+        : "";
+
+      // Wrap the dish name to 2 lines max.
+      const meas = document.createElement("canvas").getContext("2d");
+      meas.font = "700 30px " + DISPLAY;
+      const maxTitleW = W - PAD * 2 - (emoji ? 58 : 0);
+      const lines = [];
+      let cur = "";
+      for (const w of it.name.split(" ")) {
+        const t = cur ? cur + " " + w : w;
+        if (meas.measureText(t).width <= maxTitleW) cur = t;
+        else { if (cur) lines.push(cur); cur = w; if (lines.length === 2) break; }
+      }
+      if (cur && lines.length < 2) lines.push(cur);
+      if (lines.length === 2) {
+        let l2 = lines[1];
+        while (l2.length > 1 && meas.measureText(l2 + "…").width > maxTitleW) l2 = l2.slice(0, -1);
+        lines[1] = l2 + (l2 !== lines[1] ? "…" : "");
+      }
+
+      const H = PAD
+        + 34                          // brand row
+        + 26 + lines.length * 38      // title block
+        + 30                          // venue
+        + 44                          // gap + divider
+        + (cal != null ? 64 : 0)      // calories block
+        + (serving ? 22 : 0)
+        + Math.ceil(stats.length / 2) * 62
+        + 84 + PAD;                   // footer
+
+      const canvas = document.createElement("canvas");
+      const S = 2; // retina
+      canvas.width = W * S;
+      canvas.height = H * S;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(S, S);
+      ctx.fillStyle = C.bg;
+      ctx.fillRect(0, 0, W, H);
+
+      let y = PAD;
+      // Brand row: accent dot + wordmark, "MSU DINING" right-aligned.
+      ctx.fillStyle = C.accent;
+      ctx.beginPath(); ctx.arc(PAD + 6, y + 10, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = C.text;
+      ctx.font = "700 15px " + DISPLAY;
+      ctx.fillText("EAT@STATE", PAD + 22, y + 15);
+      ctx.fillStyle = C.dim;
+      ctx.font = "600 12px " + FONT;
+      const msu = "MSU DINING";
+      ctx.fillText(msu, W - PAD - ctx.measureText(msu).width, y + 15);
+      y += 60;
+
+      // Title: emoji + name (up to 2 lines), then hall · station.
+      if (emoji) {
+        ctx.font = "38px " + FONT;
+        ctx.fillText(emoji, PAD, y + 8);
+      }
+      ctx.fillStyle = C.text;
+      ctx.font = "700 30px " + DISPLAY;
+      const tx = PAD + (emoji ? 58 : 0);
+      lines.forEach((ln, i) => ctx.fillText(ln, tx, y + 26 + i * 38));
+      y += 26 + lines.length * 38 + 8;
+      ctx.fillStyle = C.muted;
+      ctx.font = "500 17px " + FONT;
+      ctx.fillText(entry.hall + " · " + entry.station, tx, y);
+      y += 30;
+
+      // Divider.
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
+      y += 34;
+
+      // Calories: big accent value, label to its right.
+      if (cal != null) {
+        ctx.fillStyle = C.accent;
+        ctx.font = "700 42px " + DISPLAY;
+        const calTxt = String(Math.round(cal));
+        const calW = ctx.measureText(calTxt).width; // width in the 42px face
+        ctx.fillText(calTxt, PAD, y + 30);
+        ctx.fillStyle = C.muted;
+        ctx.font = "600 13px " + FONT;
+        ctx.fillText("CALORIES", PAD + calW + 12, y + 22);
+        if (serving) {
+          ctx.fillStyle = C.dim;
+          ctx.font = "500 13px " + FONT;
+          ctx.fillText(serving, W - PAD - ctx.measureText(serving).width, y + 30);
+        }
+        y += 64;
+      }
+
+      // Stat grid, 2 columns.
+      const colW = (W - PAD * 2) / 2;
+      stats.forEach((r, i) => {
+        const cx = PAD + (i % 2) * colW;
+        const cy = y + Math.floor(i / 2) * 62;
+        ctx.fillStyle = C.muted;
+        ctx.font = "600 12px " + FONT;
+        ctx.fillText(r.label.toUpperCase(), cx, cy + 12);
+        ctx.fillStyle = C.text;
+        ctx.font = "700 22px " + DISPLAY;
+        const v = String(Math.round(nutrRowVal(it, r)));
+        ctx.fillText(v, cx, cy + 40);
+        if (r.unit) {
+          const vw = ctx.measureText(v).width;
+          ctx.fillStyle = C.dim;
+          ctx.font = "500 14px " + FONT;
+          ctx.fillText(" " + r.unit, cx + vw, cy + 40);
+        }
+      });
+      y += Math.ceil(stats.length / 2) * 62 + 20;
+
+      // Footer: date left, source right.
+      ctx.strokeStyle = C.line;
+      ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
+      y += 30;
+      ctx.fillStyle = C.dim;
+      ctx.font = "500 14px " + FONT;
+      if (dateLine) ctx.fillText(dateLine, PAD, y + 10);
+      const via = "via Eat@State";
+      ctx.fillText(via, W - PAD - ctx.measureText(via).width, y + 10);
+
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(null);
+          resolve(new File([blob], it.name.replace(/[^\w]+/g, "-") + ".png", { type: "image/png" }));
+        }, "image/png");
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
   $("#modal-share").addEventListener("click", async () => {
     const entry = openModalEntry;
     if (!entry) return;
@@ -2525,17 +2693,21 @@ function foodEmoji(name) {
     if (it.calories) bits.push(Math.round(it.calories) + " cal");
     if (state.date) bits.push(state.date);
     const text = bits.join(" · ");
-    const url = location.origin + location.pathname;
+    const url = siteUrl();
+    let file = null;
+    try { file = await dishShareCard(entry); } catch (err) { file = null; }
     if (navigator.share) {
-      gaEvent("share", { share_target: "dish", share_method: "native", item_name: it.name });
+      let files = file ? [file] : undefined;
+      if (files && navigator.canShare && !navigator.canShare({ files })) files = undefined; // text only
+      gaEvent("share", { share_target: "dish", share_method: "native", with_image: !!files, item_name: it.name });
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ title, text, url, files });
         return;
       } catch (err) {
         if (err && err.name === "AbortError") return; // dismissed — nothing to do
       }
     }
-    gaEvent("share", { share_target: "dish", share_method: "copy", item_name: it.name });
+    gaEvent("share", { share_target: "dish", share_method: "copy", with_image: false, item_name: it.name });
     try {
       await navigator.clipboard.writeText(text + " " + url);
       showToast("Link copied");
