@@ -2503,19 +2503,37 @@ function foodEmoji(name) {
     } else ing.hidden = true;
     m.hidden = false;
     document.body.style.overflow = "hidden";
+    // Render the share card NOW, synchronously, so the share tap can hand
+    // navigator.share() a ready file with NO async gap between the tap and
+    // the call — on iOS any such gap drops the user-activation and the OS
+    // sheet pops up then dismisses itself. drawShareCard is sync and cheap
+    // (a single canvas paint), so it runs inline.
+    shareCardPng = drawShareCard(entry);
   }
   function closeModal() {
     $("#modal").hidden = true;
     document.body.style.overflow = "";
+    shareCardPng = null;
   }
   $("#modal").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
-  // Share the open dish: a rendered PNG card (the image gives instant
-  // context — link previews are unreliable and the app is an SPA) plus the
-  // text + app link for the live data. Native Web Share with files when the
-  // platform supports it; copy fallback otherwise.
+  // Share the open dish: a PNG that reproduces the dish SHEET itself (same
+  // sections, fonts, colors) plus the text + app link. Two constraints shape
+  // the design:
+  //  (1) iOS requires navigator.share() to run inside the tap's transient
+  //      user-activation — any await between the tap and the call and the OS
+  //      sheet pops up then dismisses itself; and
+  //  (2) the image must be ready before the tap. Both are solved by drawing
+  //      the card SYNCHRONOUSLY on a <canvas> the instant the sheet opens
+  //      (shareCardPng), so the share tap converts it to a File and fires
+  //      navigator.share() with no async gap. A live DOM screenshot
+  //      (html-to-image) was tried first and rejected: its toCanvas hangs in
+  //      Chromium (the SVG foreignObject rasterizes blank — text never
+  //      paints), so a hand-drawn faithful render is both more reliable and
+  //      verifiable. The draw mirrors openModal() section-for-section.
   let openModalEntry = null;
+  let shareCardPng = null; // dataURL, filled when the sheet opens
 
   // Canonical share URL: the public GitHub Pages site, not the origin
   // (dev/tailnet origins like 127.0.0.1:7090 aren't shareable).
@@ -2525,167 +2543,277 @@ function foodEmoji(name) {
       : "https://eatatstate.github.io/menus/";
   }
 
-  // Draw the dish as a PNG card matching the app theme. Returns a Promise
-  // of a File, or null if rendering isn't possible (headless canvas, etc.).
-  function dishShareCard(entry) {
-    const it = entry.item;
-    const light = document.documentElement.classList.contains("light");
-    const C = light ? {
-      bg: "#f5f7f5", line: "#dbe3dd", text: "#1c2620", muted: "#5a6e65", dim: "#5f7168", accent: "#0f7a58",
-    } : {
-      bg: "#0d1512", line: "#24322c", text: "#e8f0ec", muted: "#8fa39b", dim: "#74877e", accent: "#35c28f",
-    };
-    const FONT = "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    const DISPLAY = "'Space Grotesk', " + FONT;
-    const W = 600, PAD = 36;
-    try {
-      // Headline stats: real-valued, non-sub rows (cal is shown separately).
-      const stats = NUTR_ROWS
-        .filter((r) => !r.sub && r.key !== "cal" && nutrRowVisible(it, r))
-        .slice(0, 6);
-      const cal = nutrRowVal(it, NUTR_ROWS[0]);
-      const emoji = foodEmoji(it.name);
-      const serving = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
-      const dateLine = state.date
-        ? new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" })
-            .format(new Date(state.date + "T12:00:00"))
-        : "";
-
-      // Wrap the dish name to 2 lines max.
-      const meas = document.createElement("canvas").getContext("2d");
-      meas.font = "700 30px " + DISPLAY;
-      const maxTitleW = W - PAD * 2 - (emoji ? 58 : 0);
-      const lines = [];
-      let cur = "";
-      for (const w of it.name.split(" ")) {
-        const t = cur ? cur + " " + w : w;
-        if (meas.measureText(t).width <= maxTitleW) cur = t;
-        else { if (cur) lines.push(cur); cur = w; if (lines.length === 2) break; }
-      }
-      if (cur && lines.length < 2) lines.push(cur);
-      if (lines.length === 2) {
-        let l2 = lines[1];
-        while (l2.length > 1 && meas.measureText(l2 + "…").width > maxTitleW) l2 = l2.slice(0, -1);
-        lines[1] = l2 + (l2 !== lines[1] ? "…" : "");
-      }
-
-      const H = PAD
-        + 34                          // brand row
-        + 26 + lines.length * 38      // title block
-        + 30                          // venue
-        + 44                          // gap + divider
-        + (cal != null ? 64 : 0)      // calories block
-        + (serving ? 22 : 0)
-        + Math.ceil(stats.length / 2) * 62
-        + 84 + PAD;                   // footer
-
-      const canvas = document.createElement("canvas");
-      const S = 2; // retina
-      canvas.width = W * S;
-      canvas.height = H * S;
-      const ctx = canvas.getContext("2d");
-      ctx.scale(S, S);
-      ctx.fillStyle = C.bg;
-      ctx.fillRect(0, 0, W, H);
-
-      let y = PAD;
-      // Brand row: accent dot + wordmark, "MSU DINING" right-aligned.
-      ctx.fillStyle = C.accent;
-      ctx.beginPath(); ctx.arc(PAD + 6, y + 10, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = C.text;
-      ctx.font = "700 15px " + DISPLAY;
-      ctx.fillText("EAT@STATE", PAD + 22, y + 15);
-      ctx.fillStyle = C.dim;
-      ctx.font = "600 12px " + FONT;
-      const msu = "MSU DINING";
-      ctx.fillText(msu, W - PAD - ctx.measureText(msu).width, y + 15);
-      y += 60;
-
-      // Title: emoji + name (up to 2 lines), then hall · station.
-      if (emoji) {
-        ctx.font = "38px " + FONT;
-        ctx.fillText(emoji, PAD, y + 8);
-      }
-      ctx.fillStyle = C.text;
-      ctx.font = "700 30px " + DISPLAY;
-      const tx = PAD + (emoji ? 58 : 0);
-      lines.forEach((ln, i) => ctx.fillText(ln, tx, y + 26 + i * 38));
-      y += 26 + lines.length * 38 + 8;
-      ctx.fillStyle = C.muted;
-      ctx.font = "500 17px " + FONT;
-      ctx.fillText(entry.hall + " · " + entry.station, tx, y);
-      y += 30;
-
-      // Divider.
-      ctx.strokeStyle = C.line;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
-      y += 34;
-
-      // Calories: big accent value, label to its right.
-      if (cal != null) {
-        ctx.fillStyle = C.accent;
-        ctx.font = "700 42px " + DISPLAY;
-        const calTxt = String(Math.round(cal));
-        const calW = ctx.measureText(calTxt).width; // width in the 42px face
-        ctx.fillText(calTxt, PAD, y + 30);
-        ctx.fillStyle = C.muted;
-        ctx.font = "600 13px " + FONT;
-        ctx.fillText("CALORIES", PAD + calW + 12, y + 22);
-        if (serving) {
-          ctx.fillStyle = C.dim;
-          ctx.font = "500 13px " + FONT;
-          ctx.fillText(serving, W - PAD - ctx.measureText(serving).width, y + 30);
-        }
-        y += 64;
-      }
-
-      // Stat grid, 2 columns.
-      const colW = (W - PAD * 2) / 2;
-      stats.forEach((r, i) => {
-        const cx = PAD + (i % 2) * colW;
-        const cy = y + Math.floor(i / 2) * 62;
-        ctx.fillStyle = C.muted;
-        ctx.font = "600 12px " + FONT;
-        ctx.fillText(r.label.toUpperCase(), cx, cy + 12);
-        ctx.fillStyle = C.text;
-        ctx.font = "700 22px " + DISPLAY;
-        const v = String(Math.round(nutrRowVal(it, r)));
-        ctx.fillText(v, cx, cy + 40);
-        if (r.unit) {
-          const vw = ctx.measureText(v).width;
-          ctx.fillStyle = C.dim;
-          ctx.font = "500 14px " + FONT;
-          ctx.fillText(" " + r.unit, cx + vw, cy + 40);
-        }
-      });
-      y += Math.ceil(stats.length / 2) * 62 + 20;
-
-      // Footer: date left, source right.
-      ctx.strokeStyle = C.line;
-      ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
-      y += 30;
-      ctx.fillStyle = C.dim;
-      ctx.font = "500 14px " + FONT;
-      if (dateLine) ctx.fillText(dateLine, PAD, y + 10);
-      const via = "via Eat@State";
-      ctx.fillText(via, W - PAD - ctx.measureText(via).width, y + 10);
-
-      return new Promise((resolve) => {
-        canvas.toBlob((blob) => {
-          if (!blob) return resolve(null);
-          resolve(new File([blob], it.name.replace(/[^\w]+/g, "-") + ".png", { type: "image/png" }));
-        }, "image/png");
-      });
-    } catch (e) {
-      return Promise.resolve(null);
+  // Rounded-rect path (ctx.roundRect isn't in every WebKit).
+  function rr(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  // Greedy word wrap to a max width.
+  function wrapText(c, text, maxW) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const t = cur ? cur + " " + w : w;
+      if (c.measureText(t).width <= maxW || !cur) cur = t;
+      else { lines.push(cur); cur = w; }
     }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [""];
   }
 
-  $("#modal-share").addEventListener("click", async () => {
+  // Draw the open dish as a PNG that mirrors the on-screen sheet. SYNC,
+  // returns a dataURL ("" on any failure — the share then goes text-only).
+  function drawShareCard(entry) {
+    try {
+      const it = entry.item;
+      const light = document.documentElement.classList.contains("light");
+      const T = light
+        ? { bg: "#f5f7f5", panel: "#eef2ef", line: "#dbe3dd", text: "#1c2620", muted: "#5a6e65", dim: "#5f7168", accent: "#0f7a58", accent2: "#7d5805" }
+        : { bg: "#0d1512", panel: "#18241f", line: "#24322c", text: "#e8f0ec", muted: "#8fa39b", dim: "#74877e", accent: "#35c28f", accent2: "#ffd166" };
+      const BADGE = {
+        entree: light ? ["#8c2b20", "#f8e1dd"] : ["#ffb3ab", "#3a1e1a"],
+        side: light ? ["#155e8c", "#dcedf9"] : ["#9ad4ff", "#17283a"],
+        grain: light ? ["#7a5a12", "#f5ebd4"] : ["#ffd88a", "#33270f"],
+        salad: light ? ["#2f7a2a", "#dff1db"] : ["#a8e6a3", "#16301a"],
+        dessert: light ? ["#7a3a8c", "#efe0f5"] : ["#f2b8ff", "#2d1733"],
+        beverage: light ? ["#1a6b66", "#dcf0ee"] : ["#8fd6d0", "#122e2c"],
+      };
+      const SANS = "Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif";
+      const DISP = "'Space Grotesk', Manrope, -apple-system, sans-serif";
+      const W = 560, PAD = 20, MAXW = W - PAD * 2;
+
+      const c = document.createElement("canvas").getContext("2d");
+      // --- measure everything first so the canvas can be sized exactly ---
+      const badge = (it.cat || "").toUpperCase();
+      const badgeCol = badge ? BADGE[it.cat] : [T.muted, light ? "#d9e4dd" : "#2c443a"];
+      c.font = "700 11px " + SANS;
+      const badgeW = c.measureText(badge).width + badge.length * 0.5 + 12;
+      c.font = "400 12px " + SANS;
+      const hallW = c.measureText(entry.hall + " \u00b7 " + entry.station).width;
+      const badgeRowH = Math.max(20, badgeW, 16) + 8;
+
+      c.font = "700 23px " + DISP;
+      const title = it.name;
+      let titleLines = wrapText(c, title, MAXW - 46);
+      if (titleLines.length > 2) { // ellipsize a 2nd+ line
+        let t = titleLines[1];
+        while (c.measureText(t + "\u2026").width > MAXW - 46 && t.length) t = t.slice(0, -1);
+        titleLines = [titleLines[0], t + "\u2026"];
+      }
+      const titleH = titleLines.length * 28;
+
+      const metaBits = [];
+      if (it.calories) metaBits.push(Math.round(it.calories) + " calories");
+      if (it.carried && state.meal !== "breakfast") metaBits.push("breakfast menu");
+      c.font = "400 13px " + SANS;
+      const metaH = metaBits.length ? c.measureText(metaBits.join(" \u00b7 ")).width ? 18 : 18 : 0;
+      const descH = it.desc ? wrapText(c, it.desc, MAXW).length * 20 + 4 : 0;
+
+      const chipW = (label) => { c.font = "600 12px " + SANS; return c.measureText(label).width + 20; };
+      const allergenLabels = (it.allergens || []).filter(Boolean);
+      const dietTagsArr = dietTags(it) || [];
+      const dietLabels = DIETS.filter((d) => dietTagsArr.includes(d.id)).map((d) => d.emoji + " " + d.label);
+      const chipsH = (labels) => {
+        let y = 0, x = 0;
+        for (const l of labels) { const w = chipW(l); if (x + w > MAXW) { y += 30; x = 0; } x += w + 6; }
+        return labels.length ? 8 + y + 24 : 0;
+      };
+      const allH = allergenLabels.length ? 14 + 18 + chipsH(allergenLabels) : 0;
+      const dietH = dietLabels.length ? 14 + 18 + chipsH(dietLabels) : 0;
+
+      const nutRows = NUTR_ROWS.filter((r) => nutrRowVisible(it, r));
+      let nutH = 0;
+      if (nutRows.length) {
+        nutH = 14 + 18;
+        const main = nutRows.filter((r) => !r.sub);
+        const subL = nutRows.filter((r) => r.sub && r.subCol === "left");
+        const subR = nutRows.filter((r) => r.sub && r.subCol === "right");
+        const cols = [];
+        for (let i = 0; i < main.length; i += 2) cols.push([main[i], main[i + 1] || null]);
+        for (let i = 0; i < cols.length; i++) {
+          const a = cols[i][0];
+          let rh = 22;
+          if (i < subL.length) rh += 18;
+          if (a.subCol === "right" && i < subR.length) rh += 18;
+          nutH += rh;
+        }
+      }
+      const ingLines = it.ingredients ? wrapText(c, it.ingredients, MAXW) : [];
+      const ingH = ingLines.length ? 14 + 18 + ingLines.length * 19 : 0;
+
+      const footH = 40;
+      const H = PAD + 6 + badgeRowH + titleH + (metaH ? 22 : 0) + descH + allH + nutH + ingH + dietH + footH + PAD;
+      const SCALE = 2;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = W * SCALE; canvas.height = H * SCALE;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(SCALE, SCALE);
+      ctx.textBaseline = "alphabetic";
+
+      // card
+      ctx.fillStyle = T.panel; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = T.line; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+      let y = PAD + 6;
+      // category badge + hall·station
+      c.font = "700 11px " + SANS;
+      ctx.font = "700 11px " + SANS;
+      if (badge) {
+        ctx.fillStyle = badgeCol[1]; rr(ctx, PAD, y, badgeW, 18, 4); ctx.fill();
+        ctx.fillStyle = badgeCol[0];
+        let bx = PAD + 6;
+        for (const ch of badge) { ctx.fillText(ch, bx, y + 13); bx += ctx.measureText(ch).width + 0.5; }
+      }
+      const tagX = PAD + (badge ? badgeW + 8 : 0);
+      ctx.font = "400 12px " + SANS;
+      ctx.fillStyle = T.dim;
+      ctx.fillText(entry.hall + " \u00b7 " + entry.station, tagX, y + 13);
+      y += badgeRowH;
+
+      // title (big emoji + name)
+      const e = foodEmoji(it.name);
+      if (e) { ctx.font = "37px " + SANS; ctx.fillStyle = T.text; ctx.fillText(e, PAD, y + 22); }
+      ctx.font = "700 23px " + DISP;
+      ctx.fillStyle = T.text;
+      let ty = y + 22;
+      const tx = PAD + (e ? 46 : 0);
+      for (const ln of titleLines) { ctx.fillText(ln, tx, ty); ty += 28; }
+      y = ty - 28 + 6;
+
+      // meta (calories · breakfast menu)
+      if (metaBits.length) {
+        ctx.font = "400 13px " + SANS;
+        ctx.fillStyle = T.muted;
+        ctx.fillText(metaBits.join(" \u00b7 "), PAD, y + 13);
+        y += 22;
+      }
+      // description
+      if (it.desc) {
+        ctx.font = "400 15px " + SANS;
+        ctx.fillStyle = T.text;
+        let dy = y + 15;
+        for (const ln of wrapText(ctx, it.desc, MAXW)) { ctx.fillText(ln, PAD, dy); dy += 20; }
+        y += descH;
+      }
+      // section heading helper (returns the y after the heading)
+      const section = (label, serving) => {
+        y += 14;
+        ctx.strokeStyle = T.line; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD, y + 0.5); ctx.lineTo(W - PAD, y + 0.5); ctx.stroke();
+        y += 12;
+        ctx.font = "400 12px " + SANS;
+        ctx.fillStyle = T.muted;
+        ctx.fillText(label.toUpperCase(), PAD, y + 12);
+        if (serving) {
+          const lw = ctx.measureText(label.toUpperCase()).width;
+          ctx.fillText(serving, PAD + lw + 6, y + 12);
+        }
+        y += 18;
+        return y;
+      };
+      // chip helper
+      const chips = (labels, color, bg, border) => {
+        let x = PAD;
+        for (const l of labels) {
+          ctx.font = "600 12px " + SANS;
+          const w = c.measureText(l).width + 20;
+          if (x + w > W - PAD) { x = PAD; y += 30; }
+          ctx.fillStyle = bg; rr(ctx, x, y - 4, w, 24, 10); ctx.fill();
+          ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillStyle = color; ctx.fillText(l, x + 10, y + 12);
+          x += w + 6;
+        }
+      };
+      // allergens
+      if (allergenLabels.length) {
+        const a2 = hexA(T.accent2, light ? 0.14 : 0.12);
+        section("Contains");
+        chips(allergenLabels, T.accent2, a2, hexA(T.accent2, light ? 0.4 : 0.34));
+        y += 24;
+      }
+      // nutrition
+      if (nutRows.length) {
+        const serving = (it.nutr && it.nutr.serv) ? "per " + it.nutr.serv : "";
+        section("Nutrition", serving);
+        const leftX = PAD, leftW = (MAXW - 14) / 2, rightX = PAD + leftW + 14, rightW = leftW;
+        const main = nutRows.filter((r) => !r.sub);
+        const subL = nutRows.filter((r) => r.sub && r.subCol === "left");
+        const subR = nutRows.filter((r) => r.sub && r.subCol === "right");
+        for (let i = 0; i < main.length; i += 2) {
+          const a = main[i], b = main[i + 1] || null;
+          const drawRow = (r, x, rightAligned) => {
+            ctx.font = "400 12px " + SANS;
+            ctx.fillStyle = T.muted; ctx.textAlign = "left";
+            ctx.fillText(r.label, x, y + 13);
+            ctx.font = "600 12px " + SANS;
+            ctx.fillStyle = T.text; ctx.textAlign = rightAligned ? "right" : "left";
+            const vx = rightAligned ? x + leftW : x;
+            ctx.fillText(fmtNutr(nutrRowVal(it, r), r.unit), vx, y + 13);
+            ctx.textAlign = "left";
+          };
+          drawRow(a, leftX, true);
+          if (b) drawRow(b, rightX, true);
+          y += 22;
+          const subFor = (r, side) => {
+            const arr = side === "left" ? subL : subR;
+            ctx.font = "400 11px " + SANS;
+            ctx.fillStyle = T.muted; ctx.textAlign = "left";
+            ctx.fillText("\u2013 " + r.label, (side === "left" ? leftX : rightX) + 10, y + 12);
+            ctx.font = "500 11px " + SANS;
+            ctx.fillStyle = T.muted; ctx.textAlign = "right";
+            ctx.fillText(fmtNutr(nutrRowVal(it, r), r.unit), (side === "left" ? leftX : rightX) + leftW, y + 12);
+            ctx.textAlign = "left";
+            y += 18;
+          };
+          if (i < subL.length) subFor(subL[i], "left");
+          if (a.subCol === "right" && i < subR.length) subFor(subR[i], "right");
+        }
+      }
+      // ingredients
+      if (ingLines.length) {
+        section("Ingredients");
+        ctx.font = "400 12px " + SANS;
+        ctx.fillStyle = T.muted;
+        let iy = y + 12;
+        for (const ln of ingLines) { ctx.fillText(ln, PAD, iy); iy += 19; }
+        y += ingH - 14 - 18;
+      }
+      // dietary flags
+      if (dietLabels.length) {
+        const g2 = hexA(T.accent, light ? 0.14 : 0.12);
+        section("Dietary");
+        chips(dietLabels, T.accent, g2, hexA(T.accent, light ? 0.4 : 0.34));
+        y += 24;
+      }
+      // footer: via Eat@State + date
+      y += 14;
+      ctx.font = "400 11px " + SANS;
+      ctx.fillStyle = T.dim;
+      ctx.fillText("via Eat@State" + (state.date ? " \u00b7 " + state.date : ""), PAD, y + 10);
+
+      return canvas.toDataURL("image/png");
+    } catch (err) {
+      return "";
+    }
+  }
+  // #rrgb -> #rrggbbaa (for color-mix approximations on the chips).
+  function hexA(hex, a) {
+    const h = hex.replace("#", "");
+    const full = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
+    return "#" + full + Math.round(a * 255).toString(16).padStart(2, "0");
+  }
+
+  $("#modal-share").addEventListener("click", () => {
     const entry = openModalEntry;
     if (!entry) return;
-    closeModal(); // one sheet at a time — the OS share sheet takes over
     const it = entry.item;
     const e = foodEmoji(it.name);
     const title = (e ? e + " " : "") + it.name;
@@ -2694,26 +2822,36 @@ function foodEmoji(name) {
     if (state.date) bits.push(state.date);
     const text = bits.join(" · ");
     const url = siteUrl();
-    let file = null;
-    try { file = await dishShareCard(entry); } catch (err) { file = null; }
-    if (navigator.share) {
-      let files = file ? [file] : undefined;
-      if (files && navigator.canShare && !navigator.canShare({ files })) files = undefined; // text only
-      gaEvent("share", { share_target: "dish", share_method: "native", with_image: !!files, item_name: it.name });
+    // Sync path: the pre-rendered card (if ready) is turned into a File
+    // right here, then navigator.share() fires with NO await in between.
+    let files = null;
+    if (shareCardPng) {
       try {
-        await navigator.share({ title, text, url, files });
-        return;
-      } catch (err) {
-        if (err && err.name === "AbortError") return; // dismissed — nothing to do
-      }
+        const b64 = shareCardPng.split(",")[1];
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const file = new File([arr], it.name.replace(/[^\w]+/g, "-") + ".png", { type: "image/png" });
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) files = [file];
+      } catch (err) { files = null; }
+    }
+    if (navigator.share) {
+      gaEvent("share", { share_target: "dish", share_method: "native", with_image: !!files, item_name: it.name });
+      // Fire-and-forget: the promise resolves after the user picks a
+      // target (or dismisses). The dish sheet stays open underneath, so
+      // dismissing the OS sheet leaves the user on the dish, not a blank app.
+      navigator.share({ title, text, url, files }).catch(() => {});
+      return;
     }
     gaEvent("share", { share_target: "dish", share_method: "copy", with_image: false, item_name: it.name });
-    try {
-      await navigator.clipboard.writeText(text + " " + url);
-      showToast("Link copied");
-    } catch (err) {
-      window.prompt("Copy this:", text + " " + url);
-    }
+    (async () => {
+      try {
+        await navigator.clipboard.writeText(text + " " + url);
+        showToast("Link copied");
+      } catch (err) {
+        window.prompt("Copy this:", text + " " + url);
+      }
+    })();
   });
 
   /* ---------- dining hours modal ---------- */
