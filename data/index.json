@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T20:01:57Z",
+  "generated_at": "2026-10-19T20:39:31Z",
   "meals": [
     "breakfast",
     "lunch",
@@ -60,6 +60,14 @@
     {
       "name": "Sabor at the International Center",
       "slug": "sabor-at-the-international-center"
+    },
+    {
+      "name": "The Gallery at Snyder/Phillips",
+      "slug": "the-gallery-at-snyderphillips"
+    },
+    {
+      "name": "Nucleus at Holmes",
+      "slug": "nucleus"
     }
   ]
 }

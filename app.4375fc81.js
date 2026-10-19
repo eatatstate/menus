@@ -3202,6 +3202,40 @@ function foodEmoji(name) {
 
   initMoreMenu();
 
+  /* ---------- orientation lock (portrait) ----------
+     The manifest's "orientation": "portrait" is honored at launch, but iOS
+     lifts the constraint while the native share sheet is up (sharing the
+     dish image hands the photo to the OS), and the standalone web view then
+     often STAYS in landscape after the sheet is dismissed. The Screen
+     Orientation API works in standalone PWAs on iOS 16.4+ (it throws in
+     Safari, which never had the problem), so lock to portrait at boot and
+     re-lock on any change to landscape / return to foreground. lock() can be
+     rejected mid-transition (SecurityError) — the catch + retry-on-change
+     handle that. On Android the manifest orientation is already enforced;
+     the lock is a harmless no-op there. */
+  function lockPortrait() {
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("portrait").catch(() => {});
+      }
+    } catch (e) { /* Safari / non-standalone — nothing to lock */ }
+  }
+  (function initOrientationLock() {
+    lockPortrait();
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener("change", () => {
+        if (/^landscape/.test(screen.orientation.type)) {
+          // The share sheet rotated us — snap back after the OS finishes
+          // the transition (locking mid-rotation is rejected).
+          setTimeout(lockPortrait, 250);
+        }
+      });
+    }
+    // Coming back from the share sheet's target app re-asserts the lock.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) lockPortrait(); });
+    window.addEventListener("focus", lockPortrait);
+  })();
+
   // Filters FAB: opens the bottom sheet. First open marks the FAB as
   // "seen" so the discoverability label never comes back.
   const filtersFab = $("#filters-fab");
