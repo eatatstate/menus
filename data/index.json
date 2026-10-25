@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-10-24T22:01:41Z",
+  "generated_at": "2026-10-25T11:01:45Z",
   "meals": [
     "breakfast",
     "lunch",
     "dinner"
   ],
   "dates": [
+    "2026-10-26",
     "2026-10-25",
     "2026-10-24",
     "2026-10-23",
     "2026-10-22",
     "2026-10-21",
     "2026-10-20",
-    "2026-10-19",
-    "2026-10-18"
+    "2026-10-19"
   ],
-  "latest_date": "2026-10-25",
+  "latest_date": "2026-10-26",
   "halls": [
     {
       "name": "The Edge at Akers",
@@ -47,7 +47,7 @@
     },
     {
       "name": "The Gallery at Snyder/Phillips",
-      "slug": "the-gallery-at-synderphillips"
+      "slug": "the-gallery-at-snyderphillips"
     },
     {
       "name": "The Workshop at STEM",
@@ -55,19 +55,11 @@
     },
     {
       "name": "Nucleus at Holmes",
-      "slug": "nuclieus"
+      "slug": "nucleus"
     },
     {
       "name": "Sabor at the International Center",
       "slug": "sabor-at-the-international-center"
-    },
-    {
-      "name": "The Gallery at Snyder/Phillips",
-      "slug": "the-gallery-at-snyderphillips"
-    },
-    {
-      "name": "Nucleus at Holmes",
-      "slug": "nucleus"
     }
   ]
 }
